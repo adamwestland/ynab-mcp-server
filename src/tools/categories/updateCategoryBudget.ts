@@ -85,11 +85,8 @@ export class UpdateCategoryBudgetTool extends YnabTool {
     const input = this.validateArgs<UpdateCategoryBudgetInput>(args);
 
     try {
-      // Validate month format - should be first day of month
-      const monthDate = new Date(input.month);
-      if (monthDate.getDate() !== 1) {
-        throw new Error('Month must be in YYYY-MM-01 format (first day of month)');
-      }
+      // Month format is already validated by Zod schema regex /^\d{4}-\d{2}-01$/
+      // The string format YYYY-MM-01 is passed directly to the API
 
       // Update the category budget
       const categoryResponse: YnabCategoryResponse = await this.client.updateCategoryBudget(

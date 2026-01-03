@@ -109,6 +109,52 @@ Environment variables:
 - `YNAB_API_TOKEN` (required) - Your YNAB API token
 - `YNAB_BASE_URL` - API base URL (default: https://api.youneedabudget.com/v1)
 
+## Testing
+
+### Test Structure
+```
+tests/
+├── client/              # Client layer tests (RateLimiter, ErrorHandler)
+├── helpers/             # Test utilities
+│   ├── mockClient.ts    # Mock YNABClient factory
+│   ├── fixtures.ts      # Factory functions for test data
+│   └── apiResponses.ts  # Error factories
+├── integration/         # Live API fixture validation
+│   ├── liveApi.test.ts  # Zod schema validation tests
+│   └── recordFixtures.ts # Script to record API responses
+├── fixtures/recorded/   # Real API response fixtures
+├── server/              # Server integration tests
+└── tools/               # Tool unit tests (by category)
+```
+
+### Running Tests
+```bash
+npm test                 # Run all tests
+npm run test:watch       # Watch mode
+npm run test:coverage    # Coverage report
+npm run test:record      # Record live API fixtures (requires YNAB_API_TOKEN)
+```
+
+### Writing Tool Tests
+Tool tests use the mock client from `tests/helpers/mockClient.ts`:
+```typescript
+import { createMockClient, type MockYNABClient } from '../../helpers/mockClient.js';
+
+let client: MockYNABClient;
+let tool: MyTool;
+
+beforeEach(() => {
+  client = createMockClient();
+  tool = new MyTool(client as any);
+});
+
+it('does something', async () => {
+  client.someMethod.mockResolvedValue({ /* mock response */ });
+  const result = await tool.execute({ budget_id: 'test' });
+  expect(result).toBeDefined();
+});
+```
+
 ## MCP Client Configuration
 
 ```json
