@@ -1,0 +1,79 @@
+{
+  "name": "ynab-mcp-server",
+  "version": "1.0.0",
+  "description": "Comprehensive Model Context Protocol server providing intelligent access to YNAB (You Need A Budget) data with AI-powered budget recommendations, spending analysis, and complete transaction management",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage",
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "prepare": "npm run build",
+    "prestart": "npm run build"
+  },
+  "keywords": [
+    "ynab",
+    "you-need-a-budget",
+    "mcp",
+    "model-context-protocol",
+    "budget",
+    "budgeting",
+    "personal-finance",
+    "financial-planning",
+    "ai-powered",
+    "claude-code",
+    "spending-analysis",
+    "transaction-management",
+    "automatic-categorization",
+    "financial-intelligence",
+    "budget-optimization",
+    "expense-tracking",
+    "financial-automation",
+    "smart-budgeting",
+    "financial-insights",
+    "budget-recommendations"
+  ],
+  "author": {
+    "name": "YNAB MCP Server Contributors",
+    "url": "https://github.com/your-repo/ynab-mcp-server"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/your-repo/ynab-mcp-server#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-repo/ynab-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-repo/ynab-mcp-server/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "examples",
+    "README.md",
+    "LICENSE",
+    ".env.example"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.4",
+    "axios": "^1.11.0",
+    "dotenv": "^17.2.1",
+    "uuid": "^10.0.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/uuid": "^10.0.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
