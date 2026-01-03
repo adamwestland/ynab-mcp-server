@@ -1,0 +1,69 @@
+{
+  "endpoint": "/budgets",
+  "recordedAt": "2026-01-03T17:20:58.270Z",
+  "data": {
+    "budgets": [
+      {
+        "id": "ee1bcd84-ff44-4d19-af0e-89216e99e931",
+        "name": "2022 Budget (Archived on 2025-03-10)",
+        "last_modified_on": "2026-01-03T17:05:33Z",
+        "first_month": "2021-11-01",
+        "last_month": "2026-01-01",
+        "date_format": {
+          "format": "MM/DD/YYYY"
+        },
+        "currency_format": {
+          "iso_code": "CAD",
+          "example_format": "123,456.78",
+          "decimal_digits": 2,
+          "decimal_separator": ".",
+          "symbol_first": true,
+          "group_separator": ",",
+          "currency_symbol": "$",
+          "display_symbol": true
+        }
+      },
+      {
+        "id": "6cdad43e-d5e8-43a0-aa4c-a1d1e4b1831a",
+        "name": "2025+",
+        "last_modified_on": "2026-01-03T17:07:50Z",
+        "first_month": "2023-08-01",
+        "last_month": "2026-01-01",
+        "date_format": {
+          "format": "MM/DD/YYYY"
+        },
+        "currency_format": {
+          "iso_code": "CAD",
+          "example_format": "123,456.78",
+          "decimal_digits": 2,
+          "decimal_separator": ".",
+          "symbol_first": true,
+          "group_separator": ",",
+          "currency_symbol": "$",
+          "display_symbol": true
+        }
+      },
+      {
+        "id": "a6127050-a085-4b46-bfd3-656cd256821d",
+        "name": "Pre 2022 Budget",
+        "last_modified_on": "2025-05-19T13:10:47Z",
+        "first_month": "2014-09-01",
+        "last_month": "2025-06-01",
+        "date_format": {
+          "format": "MM/DD/YYYY"
+        },
+        "currency_format": {
+          "iso_code": "CAD",
+          "example_format": "123,456.78",
+          "decimal_digits": 2,
+          "decimal_separator": ".",
+          "symbol_first": true,
+          "group_separator": ",",
+          "currency_symbol": "$",
+          "display_symbol": true
+        }
+      }
+    ],
+    "default_budget": null
+  }
+}

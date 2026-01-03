@@ -11,6 +11,8 @@
     "test": "vitest",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
+    "test:record": "npx tsx tests/integration/recordFixtures.ts",
+    "test:live": "vitest run tests/integration/",
     "lint": "tsc --noEmit",
     "clean": "rm -rf dist",
     "prepare": "npm run build",
@@ -39,17 +41,17 @@
     "budget-recommendations"
   ],
   "author": {
-    "name": "YNAB MCP Server Contributors",
-    "url": "https://github.com/your-repo/ynab-mcp-server"
+    "name": "Adam Westland",
+    "url": "https://github.com/adamwestland"
   },
   "license": "MIT",
-  "homepage": "https://github.com/your-repo/ynab-mcp-server#readme",
+  "homepage": "https://github.com/adamwestland/ynab-mcp-server#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/your-repo/ynab-mcp-server.git"
+    "url": "git+https://github.com/adamwestland/ynab-mcp-server.git"
   },
   "bugs": {
-    "url": "https://github.com/your-repo/ynab-mcp-server/issues"
+    "url": "https://github.com/adamwestland/ynab-mcp-server/issues"
   },
   "engines": {
     "node": ">=18.0.0"
