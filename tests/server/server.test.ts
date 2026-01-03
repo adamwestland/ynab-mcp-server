@@ -7,9 +7,9 @@ import { YnabMcpServer } from '../../src/server.js';
 import type { Config } from '../../src/config/index.js';
 
 // Mock the MCP SDK to avoid actual server startup
-vi.mock('@modelcontextprotocol/sdk/server/index.js', () => ({
-  Server: vi.fn().mockImplementation(() => ({
-    setRequestHandler: vi.fn(),
+vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
+  McpServer: vi.fn().mockImplementation(() => ({
+    registerTool: vi.fn(),
     connect: vi.fn().mockResolvedValue(undefined),
     close: vi.fn().mockResolvedValue(undefined),
   })),
@@ -82,21 +82,6 @@ describe('YnabMcpServer', () => {
       const uniqueNames = new Set(names);
 
       expect(names.length).toBe(uniqueNames.size);
-    });
-
-    it('registers custom tool via registerTool', () => {
-      const customTool = {
-        name: 'ynab_custom_test_tool',
-        description: 'A custom test tool',
-        inputSchema: { type: 'object', properties: {} },
-        execute: vi.fn().mockResolvedValue({ success: true }),
-      };
-
-      server.registerTool(customTool);
-
-      const tools = server.getRegisteredTools();
-      const customToolFound = tools.find(t => t.name === 'ynab_custom_test_tool');
-      expect(customToolFound).toBeDefined();
     });
   });
 

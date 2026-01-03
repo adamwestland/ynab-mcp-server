@@ -1,12 +1,5 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ErrorCode,
-  ListToolsRequestSchema,
-  McpError,
-} from '@modelcontextprotocol/sdk/types.js';
-import { zodToJsonSchema } from 'zod-to-json-schema';
 
 import type { Config } from './config/index.js';
 import type { Tool } from './types/index.js';
@@ -15,113 +8,81 @@ import { registerTools } from './tools/index.js';
 
 /**
  * YNAB MCP Server - Provides access to YNAB (You Need A Budget) data via MCP protocol
+ *
+ * Uses the high-level McpServer API which automatically handles:
+ * - Tool capability registration (tools: { listChanged: true })
+ * - ListTools and CallTool request handlers
+ * - Zod schema to JSON Schema conversion
  */
 export class YnabMcpServer {
-  private server: Server;
-  private tools: Map<string, Tool> = new Map();
+  private server: McpServer;
   private ynabClient: YNABClient;
+  private toolCount: number = 0;
 
   constructor(config: Config) {
     // Initialize YNAB client
     this.ynabClient = new YNABClient(config, console);
 
-    // Initialize MCP server
-    this.server = new Server(
-      {
-        name: 'ynab-mcp-server',
-        version: '1.0.0',
-        description: 'MCP server for YNAB (You Need A Budget) integration',
-      },
-      {
-        capabilities: {
-          tools: {},
-          resources: {},
-        },
-      }
-    );
+    // Initialize MCP server using the high-level McpServer API
+    this.server = new McpServer({
+      name: 'ynab-mcp-server',
+      version: '1.0.0',
+    });
 
-    this.setupHandlers();
     this.registerAllTools();
   }
 
   /**
-   * Set up MCP protocol request handlers
-   */
-  private setupHandlers(): void {
-    // Handle list tools requests
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      return {
-        tools: Array.from(this.tools.values()).map(tool => {
-          // Convert Zod schema to JSON Schema for MCP protocol
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const jsonSchema = zodToJsonSchema(tool.inputSchema as any, {
-            $refStrategy: 'none',
-            target: 'jsonSchema7',
-          });
-          return {
-            name: tool.name,
-            description: tool.description,
-            inputSchema: jsonSchema,
-          };
-        }),
-      };
-    });
-
-    // Handle tool execution requests
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const { name, arguments: args } = request.params;
-      
-      const tool = this.tools.get(name);
-      if (!tool) {
-        throw new McpError(ErrorCode.MethodNotFound, `Tool ${name} not found`);
-      }
-
-      try {
-        // Execute the tool and get result
-        const result = await tool.execute(args);
-        
-        // Return structured response
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      } catch (error) {
-        // Enhanced error handling
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error(`Tool execution error for ${name}:`, error);
-        
-        throw new McpError(
-          ErrorCode.InternalError,
-          `Tool execution failed: ${errorMessage}`
-        );
-      }
-    });
-  }
-
-  /**
-   * Register all available YNAB tools
+   * Register all available YNAB tools with the MCP server
    */
   private registerAllTools(): void {
     try {
-      registerTools(this.ynabClient).forEach(tool => {
-        this.registerTool(tool);
+      const tools = registerTools(this.ynabClient);
+
+      tools.forEach(tool => {
+        this.server.registerTool(
+          tool.name,
+          {
+            description: tool.description,
+            // McpServer handles Zod to JSON Schema conversion internally
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            inputSchema: tool.inputSchema as any,
+          },
+          async (args: unknown) => {
+            try {
+              const result = await tool.execute(args);
+              return {
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: JSON.stringify(result, null, 2),
+                  },
+                ],
+              };
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              console.error(`Tool execution error for ${tool.name}:`, error);
+              // Return error as content rather than throwing
+              return {
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: JSON.stringify({ error: errorMessage }, null, 2),
+                  },
+                ],
+                isError: true,
+              };
+            }
+          }
+        );
       });
-      console.error(`Registered ${this.tools.size} YNAB tools`);
+
+      this.toolCount = tools.length;
+      console.error(`Registered ${this.toolCount} YNAB tools`);
     } catch (error) {
       console.error('Failed to register tools:', error);
       throw error;
     }
-  }
-
-  /**
-   * Register a single tool
-   */
-  public registerTool(tool: Tool): void {
-    this.tools.set(tool.name, tool);
   }
 
   /**
@@ -135,7 +96,7 @@ export class YnabMcpServer {
    * Get registered tools (for testing or debugging)
    */
   public getRegisteredTools(): Tool[] {
-    return Array.from(this.tools.values());
+    return registerTools(this.ynabClient);
   }
 
   /**
@@ -170,8 +131,8 @@ export class YnabMcpServer {
       // Start MCP server
       const transport = new StdioServerTransport();
       await this.server.connect(transport);
-      
-      console.error(`YNAB MCP Server started with ${this.tools.size} tools`);
+
+      console.error(`YNAB MCP Server started with ${this.toolCount} tools`);
     } catch (error) {
       console.error('Failed to start YNAB MCP Server:', error);
       throw error;
