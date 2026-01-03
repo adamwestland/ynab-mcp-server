@@ -1,25 +1,25 @@
 # YNAB MCP Server
 
-A comprehensive Model Context Protocol (MCP) server that provides intelligent access to YNAB (You Need A Budget) data. This server enables AI assistants like Claude Code to interact with your YNAB budgets, accounts, transactions, and provides advanced features like AI-powered budget allocation recommendations and spending pattern analysis.
+A comprehensive Model Context Protocol (MCP) server that provides access to YNAB (You Need A Budget) data. This server enables AI assistants like Claude Code to interact with your YNAB budgets, accounts, transactions, and provides advanced features like automated budget allocation recommendations and spending pattern analysis.
 
 ## 🌟 Features
 
 ### Core Functionality
 - **Complete Budget Management**: List budgets, accounts, categories with full metadata
 - **Advanced Transaction Operations**: CRUD operations, batch updates, split transactions, transfers
-- **Intelligent Category Management**: Budget allocation, goal tracking, spending analysis
+- **Category Management**: Budget allocation, goal tracking, spending analysis
 - **Payee Management**: Create, retrieve, and manage payees across budgets
 - **Scheduled Transactions**: Full lifecycle management of recurring transactions
 - **Import Capabilities**: Bulk transaction import with validation
 
-### Advanced Intelligence Features
-- **AI-Powered Budget Allocation**: Smart recommendations based on spending patterns and goals
+### Analysis & Automation Features
+- **Automated Budget Allocation**: Recommendations based on spending patterns and goals
 - **Spending Pattern Analysis**: Identify trends, anomalies, and optimization opportunities
 - **Transfer Detection**: Automatic linking and management of account transfers
 - **Goal-Based Budgeting**: Recommendations aligned with your financial goals
 
 ### Technical Excellence
-- **Rate Limiting**: Built-in respect for YNAB API limits with intelligent retry logic
+- **Rate Limiting**: Built-in respect for YNAB API limits with automatic retry logic
 - **Error Handling**: Comprehensive error handling with detailed diagnostics
 - **Type Safety**: Full TypeScript support with extensive type definitions
 - **Delta Sync**: Efficient synchronization using YNAB's server knowledge system
@@ -119,10 +119,10 @@ This server provides **30+ specialized tools** organized into these categories:
 - `ynab_update_scheduled_transaction` - Modify scheduled transactions
 - `ynab_delete_scheduled_transaction` - Remove scheduled transactions
 
-### AI-Powered Intelligence (3 tools)
-- `ynab_recommend_category_allocation` - AI-driven budget recommendations
+### Analysis & Allocation (3 tools)
+- `ynab_recommend_category_allocation` - Pattern-based budget recommendations
 - `ynab_analyze_spending_patterns` - Comprehensive spending analysis
-- `ynab_distribute_to_be_budgeted` - Smart distribution of available funds
+- `ynab_distribute_to_be_budgeted` - Automated distribution of available funds
 
 For detailed documentation of all tools, see [docs/TOOL_REFERENCE.md](docs/TOOL_REFERENCE.md).
 
@@ -143,9 +143,9 @@ await tools.ynab_get_transactions({
 });
 ```
 
-### Advanced Intelligence
+### Analysis & Allocation
 ```javascript
-// Get AI-powered budget recommendations
+// Get budget recommendations based on spending patterns
 await tools.ynab_recommend_category_allocation({
   budget_id: "your-budget-id",
   strategy: "balanced",
@@ -166,7 +166,7 @@ For comprehensive examples, see the [examples/](examples/) directory:
 - [Budget Management](examples/budget-management.md) - Category and budget operations
 - [Transaction Management](examples/transaction-management.md) - CRUD and batch operations
 - [Transfer Detection](examples/transfer-detection.md) - Managing account transfers
-- [Intelligent Budgeting](examples/intelligent-budgeting.md) - AI-powered features
+- [Spending Analysis](examples/spending-analysis.md) - Analysis and allocation features
 - [Scheduled Transactions](examples/scheduled-transactions.md) - Recurring transactions
 
 ## ⚙️ Configuration
@@ -184,7 +184,7 @@ For comprehensive examples, see the [examples/](examples/) directory:
 
 The server includes sophisticated rate limiting and error handling:
 
-- **Smart Rate Limiting**: Respects YNAB's 200 requests/hour limit with intelligent backoff
+- **Rate Limiting**: Respects YNAB's 200 requests/hour limit with exponential backoff
 - **Automatic Retry**: Exponential backoff for transient failures
 - **Connection Monitoring**: Health checks and connection status reporting
 - **Detailed Error Messages**: Comprehensive error categorization and helpful diagnostics
@@ -240,7 +240,7 @@ src/
 │   ├── scheduled/      # Scheduled transaction tools
 │   ├── transfers/      # Transfer linking tools
 │   ├── imports/        # Transaction import tools
-│   └── intelligence/   # AI-powered analysis and allocation
+│   └── analysis/       # Spending analysis and allocation
 ├── types/              # TypeScript type definitions
 ├── utils/              # Utility functions
 ├── auth/               # Authentication helpers

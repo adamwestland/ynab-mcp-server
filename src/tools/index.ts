@@ -28,9 +28,9 @@ import { GetScheduledTransactionTool } from './scheduled/getScheduledTransaction
 import { CreateScheduledTransactionTool } from './scheduled/createScheduledTransaction.js';
 import { UpdateScheduledTransactionTool } from './scheduled/updateScheduledTransaction.js';
 import { DeleteScheduledTransactionTool } from './scheduled/deleteScheduledTransaction.js';
-import { RecommendCategoryAllocationTool } from './intelligence/recommendCategoryAllocation.js';
-import { AnalyzeSpendingPatternsTool } from './intelligence/analyzeSpendingPatterns.js';
-import { DistributeToBebudgetedTool } from './intelligence/distributeToBebudgeted.js';
+import { RecommendCategoryAllocationTool } from './analysis/recommendCategoryAllocation.js';
+import { AnalyzeSpendingPatternsTool } from './analysis/analyzeSpendingPatterns.js';
+import { DistributeToBebudgetedTool } from './analysis/distributeToBebudgeted.js';
 
 import type { Tool } from '../types/index.js';
 import type { YNABClient } from '../client/YNABClient.js';
@@ -82,7 +82,7 @@ export function registerTools(client: YNABClient): Tool[] {
     new UpdateScheduledTransactionTool(client),
     new DeleteScheduledTransactionTool(client),
     
-    // Intelligence tools
+    // Analysis tools
     new RecommendCategoryAllocationTool(client),
     new AnalyzeSpendingPatternsTool(client),
     new DistributeToBebudgetedTool(client),

@@ -11,7 +11,7 @@ This document provides comprehensive documentation for all 30+ tools available i
 - [Scheduled Transactions](#scheduled-transactions)
 - [Transfer Management](#transfer-management)
 - [Import Tools](#import-tools)
-- [AI-Powered Intelligence](#ai-powered-intelligence)
+- [Analysis & Allocation](#analysis--allocation)
 - [Common Patterns](#common-patterns)
 - [Error Handling](#error-handling)
 
@@ -1230,11 +1230,11 @@ Import multiple transactions from external sources with validation.
 
 ---
 
-## AI-Powered Intelligence
+## Analysis & Allocation
 
 ### `ynab_recommend_category_allocation`
 
-Get AI-powered budget allocation recommendations based on spending patterns and goals.
+Get budget allocation recommendations based on spending patterns and goals.
 
 **Parameters:**
 ```typescript
@@ -1491,7 +1491,7 @@ Perform comprehensive analysis of spending patterns to identify trends and oppor
 
 ### `ynab_distribute_to_be_budgeted`
 
-Intelligently distribute available "To Be Budgeted" funds across categories.
+Distribute available "To Be Budgeted" funds across categories using configurable strategies.
 
 **Parameters:**
 ```typescript

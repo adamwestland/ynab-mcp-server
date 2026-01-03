@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-YNAB MCP Server - A Model Context Protocol server providing AI assistants with comprehensive access to YNAB (You Need A Budget) data. Features 27+ tools for budget management, transactions, categories, payees, scheduled transactions, transfers, and AI-powered budget recommendations.
+YNAB MCP Server - A Model Context Protocol server providing AI assistants with comprehensive access to YNAB (You Need A Budget) data. Features 27+ tools for budget management, transactions, categories, payees, scheduled transactions, transfers, and automated budget recommendations.
 
 ## Essential Commands
 
@@ -60,7 +60,7 @@ src/tools/
 ├── transfers/     # Link/unlink transfers
 ├── months/        # Monthly budget data
 ├── imports/       # Bulk transaction import
-└── intelligence/  # AI-powered allocation and analysis
+└── analysis/      # Spending analysis and allocation
 ```
 
 ### Adding a New Tool

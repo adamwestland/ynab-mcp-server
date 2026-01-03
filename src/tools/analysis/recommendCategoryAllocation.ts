@@ -28,7 +28,7 @@ type RecommendCategoryAllocationInput = z.infer<typeof RecommendCategoryAllocati
 /**
  * Tool for recommending category budget allocations based on spending patterns and goals
  * 
- * This tool provides intelligent budget allocation recommendations by:
+ * This tool provides budget allocation recommendations by:
  * - Analyzing historical spending patterns and trends
  * - Considering category goals and target dates
  * - Applying different allocation strategies (proportional, goals-first, etc.)
@@ -38,7 +38,7 @@ type RecommendCategoryAllocationInput = z.infer<typeof RecommendCategoryAllocati
  */
 export class RecommendCategoryAllocationTool extends YnabTool {
   name = 'ynab_recommend_category_allocation';
-  description = 'Get intelligent budget allocation recommendations based on spending patterns, goals, and chosen strategy. Analyzes historical data to suggest optimal category budgets with confidence scores and detailed reasoning.';
+  description = 'Get budget allocation recommendations based on spending patterns, goals, and chosen strategy. Analyzes historical data to suggest optimal category budgets with confidence scores and detailed reasoning.';
   inputSchema = RecommendCategoryAllocationInputSchema;
 
   /**

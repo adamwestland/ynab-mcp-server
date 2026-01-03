@@ -11,7 +11,7 @@ const DistributeToBebudgetedInputSchema = z.object({
   budget_id: z.string().describe('The ID of the budget to distribute funds in'),
   month: z.string().describe('The month to distribute funds for (ISO format: YYYY-MM-DD, typically first day of month)'),
   method: z.enum(['template', 'average', 'goals', 'custom']).default('custom')
-    .describe('Distribution method: template (proportional to current budget), average (based on spending), goals (prioritize goals), custom (intelligent mix)'),
+    .describe('Distribution method: template (proportional to current budget), average (based on spending), goals (prioritize goals), custom (combined approach)'),
   emergency_fund_target: z.number().optional()
     .describe('Target emergency fund amount in milliunits (affects prioritization in custom method)'),
   max_allocation_per_category: z.number().optional()
@@ -31,11 +31,11 @@ type DistributeToBebudgetedInput = z.infer<typeof DistributeToBebudgetedInputSch
 /**
  * Tool for automatically distributing to-be-budgeted funds across categories
  * 
- * This tool intelligently distributes available budget funds using various strategies:
+ * This tool distributes available budget funds using various strategies:
  * - Template method: Based on existing budget proportions
  * - Average method: Based on historical spending averages
  * - Goals method: Prioritize categories with defined goals
- * - Custom method: Intelligent mix considering goals, spending patterns, and priorities
+ * - Custom method: Combined approach considering goals, spending patterns, and priorities
  * 
  * Features include:
  * - Emergency fund prioritization
@@ -47,7 +47,7 @@ type DistributeToBebudgetedInput = z.infer<typeof DistributeToBebudgetedInputSch
  */
 export class DistributeToBebudgetedTool extends YnabTool {
   name = 'ynab_distribute_to_be_budgeted';
-  description = 'Automatically distribute to-be-budgeted funds across categories using intelligent allocation methods. Supports multiple strategies including goal-based, template-based, and custom smart distribution.';
+  description = 'Automatically distribute to-be-budgeted funds across categories using multiple allocation methods. Supports strategies including goal-based, template-based, and custom distribution.';
   inputSchema = DistributeToBebudgetedInputSchema;
 
   /**

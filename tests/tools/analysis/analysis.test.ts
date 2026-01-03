@@ -1,11 +1,11 @@
 /**
- * Intelligence Tools Unit Tests
+ * Analysis Tools Unit Tests
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { AnalyzeSpendingPatternsTool } from '../../../src/tools/intelligence/analyzeSpendingPatterns.js';
-import { DistributeToBebudgetedTool } from '../../../src/tools/intelligence/distributeToBebudgeted.js';
-import { RecommendCategoryAllocationTool } from '../../../src/tools/intelligence/recommendCategoryAllocation.js';
+import { AnalyzeSpendingPatternsTool } from '../../../src/tools/analysis/analyzeSpendingPatterns.js';
+import { DistributeToBebudgetedTool } from '../../../src/tools/analysis/distributeToBebudgeted.js';
+import { RecommendCategoryAllocationTool } from '../../../src/tools/analysis/recommendCategoryAllocation.js';
 import { createMockClient, type MockYNABClient } from '../../helpers/mockClient.js';
 import { createMockCategory, createMockCategoryGroup, createMockTransaction } from '../../helpers/fixtures.js';
 

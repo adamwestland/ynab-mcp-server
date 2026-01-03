@@ -1,10 +1,10 @@
-# Intelligent Budgeting Examples
+# Spending Analysis & Allocation Examples
 
-This guide demonstrates the AI-powered intelligence features of the YNAB MCP Server. Learn how to use advanced algorithms for budget recommendations, spending analysis, and automated fund distribution.
+This guide demonstrates the analysis and allocation features of the YNAB MCP Server. Learn how to use pattern-based algorithms for budget recommendations, spending analysis, and automated fund distribution.
 
 ## Table of Contents
 
-- [AI-Powered Category Allocation](#ai-powered-category-allocation)
+- [Category Allocation Recommendations](#category-allocation-recommendations)
 - [Spending Pattern Analysis](#spending-pattern-analysis)
 - [Automated Fund Distribution](#automated-fund-distribution)
 - [Budget Optimization Strategies](#budget-optimization-strategies)
@@ -13,12 +13,12 @@ This guide demonstrates the AI-powered intelligence features of the YNAB MCP Ser
 
 ---
 
-## AI-Powered Category Allocation
+## Category Allocation Recommendations
 
 ### Basic Allocation Recommendations
 
 **Human Request:**
-> "I have $800 to allocate to my budget categories. Give me smart recommendations based on my spending patterns"
+> "I have $800 to allocate to my budget categories. Give me recommendations based on my spending patterns"
 
 **Claude Code Usage:**
 ```javascript
@@ -360,10 +360,10 @@ ynab_analyze_spending_patterns({
 
 ## Automated Fund Distribution
 
-### Smart Distribution of Available Funds
+### Automated Distribution of Available Funds
 
 **Human Request:**
-> "I have $1,500 in 'To Be Budgeted'. Distribute it intelligently across my categories"
+> "I have $1,500 in 'To Be Budgeted'. Distribute it across my categories based on priorities"
 
 **Claude Code Usage:**
 ```javascript
@@ -779,7 +779,7 @@ ynab_recommend_category_allocation({
 
 ---
 
-## Best Practices for Intelligent Budgeting
+## Best Practices for Data-Driven Budgeting
 
 ### Regular Analysis Schedule
 
@@ -811,14 +811,14 @@ ynab_recommend_category_allocation({
    - Track goal achievement rates
 
 3. **Regular Calibration:**
-   - Compare AI recommendations with actual results
+   - Compare recommendations with actual results
    - Adjust strategies based on performance
    - Learn from successful allocation decisions
 
 ### Integration with Manual Planning
 
-**Combine AI with Human Judgment:**
-- Use AI for data analysis and pattern recognition
+**Combine Data with Human Judgment:**
+- Use automated tools for data analysis and pattern recognition
 - Apply human context for life changes and priorities
 - Balance algorithmic recommendations with personal values
 
@@ -834,4 +834,4 @@ ynab_recommend_category_allocation({
 
 ---
 
-The intelligent budgeting features provide powerful insights and automation while still allowing for personal control and adjustment. Use these tools to enhance your decision-making with data-driven recommendations while maintaining alignment with your personal financial goals and values.
+The analysis and allocation features provide powerful insights and automation while still allowing for personal control and adjustment. Use these tools to enhance your decision-making with data-driven recommendations while maintaining alignment with your personal financial goals and values.

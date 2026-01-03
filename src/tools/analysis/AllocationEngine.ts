@@ -76,9 +76,9 @@ const ESSENTIAL_KEYWORDS = [
 ];
 
 /**
- * Core allocation engine for intelligent budget distribution
- * 
- * This class provides sophisticated allocation logic including:
+ * Core allocation engine for budget distribution
+ *
+ * This class provides allocation logic including:
  * - Multiple allocation strategies based on different priorities
  * - Goal-based allocation with progress tracking
  * - Predictability-aware budgeting

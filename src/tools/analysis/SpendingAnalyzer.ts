@@ -62,7 +62,7 @@ interface MonthlySpending {
  * - Predictability scoring based on variance
  * - Seasonal pattern detection
  * - Trend analysis using linear regression
- * - Intelligent recommendations based on patterns
+ * - Pattern-based recommendations
  */
 export class SpendingAnalyzer {
   
