@@ -6,6 +6,7 @@ import {
   ListToolsRequestSchema,
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 
 import type { Config } from './config/index.js';
 import type { Tool } from './types/index.js';
@@ -50,11 +51,19 @@ export class YnabMcpServer {
     // Handle list tools requests
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
-        tools: Array.from(this.tools.values()).map(tool => ({
-          name: tool.name,
-          description: tool.description,
-          inputSchema: tool.inputSchema,
-        })),
+        tools: Array.from(this.tools.values()).map(tool => {
+          // Convert Zod schema to JSON Schema for MCP protocol
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const jsonSchema = zodToJsonSchema(tool.inputSchema as any, {
+            $refStrategy: 'none',
+            target: 'jsonSchema7',
+          });
+          return {
+            name: tool.name,
+            description: tool.description,
+            inputSchema: jsonSchema,
+          };
+        }),
       };
     });
 
