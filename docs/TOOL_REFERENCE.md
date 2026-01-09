@@ -1080,51 +1080,51 @@ Delete a scheduled transaction.
 
 ## Transfer Management
 
-### `ynab_link_transfer`
+### `ynab_create_transfer`
 
-Link two transactions as a transfer between accounts.
+Create a new transfer between two accounts. This creates both outflow and inflow transactions automatically linked together.
+
+**WARNING:** This tool always creates NEW transactions. It does NOT link existing transactions. If a matching transaction already exists, this will create a duplicate.
 
 **Parameters:**
 ```typescript
 {
   budget_id: string;                    // Required: Budget ID
-  transaction_id_1: string;             // Required: First transaction ID
-  transaction_id_2: string;             // Required: Second transaction ID
+  from_account_id: string;              // Required: Account to transfer FROM
+  to_account_id: string;                // Required: Account to transfer TO
+  amount: number;                       // Required: Amount in milliunits (positive value)
+  date: string;                         // Required: Date in YYYY-MM-DD format
+  memo?: string;                        // Optional memo
 }
 ```
 
 **Response:**
 ```typescript
 {
-  transfer_link: {
-    transaction_1: {
-      id: string;
-      account_id: string;
-      account_name: string;
-      amount: {
-        milliunits: number;
-        formatted: string;
-      };
-      transfer_account_id: string;
-      transfer_transaction_id: string;
+  transfer_transaction: {
+    id: string;
+    date: string;
+    amount: {
+      milliunits: number;
+      formatted: string;
     };
-    transaction_2: {
-      id: string;
-      account_id: string;
-      account_name: string;
-      amount: {
-        milliunits: number;
-        formatted: string;
-      };
-      transfer_account_id: string;
-      transfer_transaction_id: string;
+    memo: string | null;
+    payee: {
+      id: string | null;
+      name: string | null;
     };
+    account: {
+      id: string;
+      name: string;
+    };
+    transfer: {
+      account_id: string;
+      transaction_id: string | null;
+    };
+    cleared: string;
+    approved: boolean;
   };
-  validation: {
-    amounts_match: boolean;
-    dates_match: boolean;
-    is_valid_transfer: boolean;
-  };
+  server_knowledge: number;
 }
 ```
 

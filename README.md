@@ -99,7 +99,7 @@ This server provides **30+ specialized tools** organized into these categories:
 - `ynab_update_transaction_splits` - Modify split transaction details
 - `ynab_batch_update_transactions` - Bulk transaction operations
 - `ynab_import_transactions` - Import transactions from external sources
-- `ynab_link_transfer` - Link transactions as transfers between accounts
+- `ynab_create_transfer` - Create new linked transfers between accounts
 - `ynab_unlink_transfer` - Remove transfer links
 
 ### Category & Budget Management (3 tools)

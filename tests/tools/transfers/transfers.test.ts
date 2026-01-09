@@ -3,22 +3,22 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { LinkTransferTool } from '../../../src/tools/transfers/linkTransfer.js';
+import { CreateTransferTool } from '../../../src/tools/transfers/createTransfer.js';
 import { UnlinkTransferTool } from '../../../src/tools/transfers/unlinkTransfer.js';
 import { createMockClient, type MockYNABClient } from '../../helpers/mockClient.js';
 import { createMockAccount, createMockTransaction } from '../../helpers/fixtures.js';
 
-describe('LinkTransferTool', () => {
+describe('CreateTransferTool', () => {
   let client: MockYNABClient;
-  let tool: LinkTransferTool;
+  let tool: CreateTransferTool;
 
   beforeEach(() => {
     client = createMockClient();
-    tool = new LinkTransferTool(client as any);
+    tool = new CreateTransferTool(client as any);
   });
 
   it('has correct name', () => {
-    expect(tool.name).toBe('ynab_link_transfer');
+    expect(tool.name).toBe('ynab_create_transfer');
   });
 
   it('requires budget_id, from_account_id, to_account_id, amount, and date', async () => {

@@ -3,9 +3,9 @@ import { YnabTool } from '../base.js';
 import type { YnabTransactionResponse } from '../../types/index.js';
 
 /**
- * Input schema for the link transfer tool
+ * Input schema for the create transfer tool
  */
-const LinkTransferInputSchema = z.object({
+const CreateTransferInputSchema = z.object({
   budget_id: z.string().describe('The ID of the budget containing the accounts'),
   from_account_id: z.string().describe('The ID of the account to transfer money from'),
   to_account_id: z.string().describe('The ID of the account to transfer money to'),
@@ -14,25 +14,28 @@ const LinkTransferInputSchema = z.object({
   memo: z.string().optional().describe('Optional memo for the transfer'),
 });
 
-type LinkTransferInput = z.infer<typeof LinkTransferInputSchema>;
+type CreateTransferInput = z.infer<typeof CreateTransferInputSchema>;
 
 /**
  * Tool for creating a transfer between two accounts
- * 
+ *
  * This tool creates linked transactions between accounts by:
  * - Creating an outflow transaction in the source account
  * - Using the transfer_payee_id from the destination account
  * - YNAB automatically creates the matching inflow transaction
  * - Both transactions are linked as a transfer pair
+ *
+ * NOTE: This always creates NEW transactions. It does not link existing transactions.
+ * If a matching transaction already exists in the destination account, this will create a duplicate.
  */
-export class LinkTransferTool extends YnabTool {
-  name = 'ynab_link_transfer';
-  description = 'Create a transfer between two accounts. Creates linked outflow and inflow transactions automatically. Amount should be positive milliunits (1000 = $1.00).';
-  inputSchema = LinkTransferInputSchema;
+export class CreateTransferTool extends YnabTool {
+  name = 'ynab_create_transfer';
+  description = 'Create a new transfer between two accounts. Creates both outflow and inflow transactions automatically linked together. Amount should be positive milliunits (1000 = $1.00). WARNING: Always creates new transactions - does not link to existing ones.';
+  inputSchema = CreateTransferInputSchema;
 
   /**
-   * Execute the link transfer tool
-   * 
+   * Execute the create transfer tool
+   *
    * @param args Input arguments including account IDs, amount, date, and optional memo
    * @returns Created transfer transaction information
    */
@@ -62,7 +65,7 @@ export class LinkTransferTool extends YnabTool {
     };
     server_knowledge: number;
   }> {
-    const input = this.validateArgs<LinkTransferInput>(args);
+    const input = this.validateArgs<CreateTransferInput>(args);
 
     try {
       // Validate amount is positive
@@ -143,7 +146,7 @@ export class LinkTransferTool extends YnabTool {
       };
 
     } catch (error) {
-      this.handleError(error, 'link transfer');
+      this.handleError(error, 'create transfer');
     }
   }
 }

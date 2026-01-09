@@ -1,2 +1,2 @@
-export { LinkTransferTool } from './linkTransfer.js';
+export { CreateTransferTool } from './createTransfer.js';
 export { UnlinkTransferTool } from './unlinkTransfer.js';

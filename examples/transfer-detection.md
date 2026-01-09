@@ -35,106 +35,104 @@ In YNAB, transfers represent money moving between your accounts and don't affect
 
 ---
 
-## Manual Transfer Linking
+## Linking Existing Transactions as Transfers
 
-### Basic Transfer Link
+### CRITICAL: YNAB Transfer Behavior
+
+**YNAB does NOT have a direct API to link two existing transactions.** When you want to convert existing unlinked transactions into a transfer, you must:
+
+1. **If ONLY one side exists:** Update its `payee_id` to the destination account's `transfer_payee_id`. YNAB will create the matching transaction automatically.
+
+2. **If BOTH sides exist:** You must DELETE one transaction first, then update the remaining one's `payee_id`. If you update without deleting first, YNAB creates a DUPLICATE.
+
+3. **If NEITHER side exists:** Use `ynab_create_transfer` to create both sides at once.
+
+### Linking When One Transaction Exists
 
 **Human Request:**
-> "I moved $500 from checking to savings yesterday. The transactions exist but aren't linked as a transfer"
+> "I have a $500 outflow in checking that should be a transfer to savings, but there's no matching transaction in savings yet"
 
-**Step 1: Find the transactions**
+**Step 1: Get the destination account's transfer_payee_id**
 ```javascript
-// Find the outflow from checking
-ynab_get_transactions({
-  budget_id: "budget-id",
-  account_id: "checking-account-id",
-  since_date: "2024-01-14", // Yesterday
-  limit: 10
+ynab_get_accounts({
+  budget_id: "budget-id"
 })
+// Find savings account's transfer_payee_id
+```
 
-// Find the inflow to savings
-ynab_get_transactions({
-  budget_id: "budget-id", 
-  account_id: "savings-account-id",
-  since_date: "2024-01-14",
-  limit: 10
+**Step 2: Update the existing transaction**
+```javascript
+ynab_update_transaction({
+  budget_id: "budget-id",
+  transaction_id: "checking-outflow-transaction-id",
+  payee_id: "savings-transfer-payee-id"  // Use transfer_payee_id from savings account
 })
 ```
 
-**Step 2: Link the transactions**
-```javascript
-ynab_link_transfer({
-  budget_id: "budget-id",
-  transaction_id_1: "checking-outflow-transaction-id", // -$500
-  transaction_id_2: "savings-inflow-transaction-id"    // +$500
-})
-```
+YNAB automatically creates the matching +$500 inflow in savings and links both transactions.
 
-**Response:**
-```json
-{
-  "transfer_link": {
-    "transaction_1": {
-      "id": "checking-outflow-transaction-id",
-      "account_id": "checking-account-id",
-      "account_name": "Checking Account",
-      "amount": {
-        "milliunits": -500000,
-        "formatted": "-$500.00"
-      },
-      "transfer_account_id": "savings-account-id",
-      "transfer_transaction_id": "savings-inflow-transaction-id"
-    },
-    "transaction_2": {
-      "id": "savings-inflow-transaction-id", 
-      "account_id": "savings-account-id",
-      "account_name": "Savings Account",
-      "amount": {
-        "milliunits": 500000,
-        "formatted": "$500.00"
-      },
-      "transfer_account_id": "checking-account-id",
-      "transfer_transaction_id": "checking-outflow-transaction-id"
-    }
-  },
-  "validation": {
-    "amounts_match": true,
-    "dates_match": true,
-    "is_valid_transfer": true
-  }
-}
+### Linking When BOTH Transactions Already Exist
+
+**Human Request:**
+> "I have a $500 outflow in checking AND a $500 inflow in savings. They're not linked as a transfer."
+
+**WARNING:** If you just update payee_id when both sides exist, YNAB creates a DUPLICATE.
+
+**Correct approach:**
+```javascript
+// Step 1: DELETE the inflow transaction first
+ynab_delete_transaction({
+  budget_id: "budget-id",
+  transaction_id: "savings-inflow-transaction-id"
+})
+
+// Step 2: Update the outflow's payee to create the linked transfer
+ynab_update_transaction({
+  budget_id: "budget-id",
+  transaction_id: "checking-outflow-transaction-id",
+  payee_id: "savings-transfer-payee-id"
+})
 ```
 
 ### Credit Card Payment Transfer
 
 **Human Request:**
-> "I paid my credit card $1,200 from my checking account. Link these transactions as a transfer"
-
-**Claude Code Usage:**
-```javascript
-ynab_link_transfer({
-  budget_id: "budget-id",
-  transaction_id_1: "checking-payment-transaction-id", // -$1,200 from checking
-  transaction_id_2: "credit-card-payment-transaction-id" // +$1,200 to credit card (reduces balance)
-})
-```
+> "I paid my credit card $1,200 from my checking account. The transactions exist but aren't linked."
 
 **Key Points:**
 - Credit card payments reduce the card balance (positive amount on credit card)
 - The checking account shows negative amount (money leaving)
-- Both transactions should use "Transfer : [Account Name]" as payee
+- You need the credit card account's `transfer_payee_id`
+
+**If only checking transaction exists:**
+```javascript
+ynab_update_transaction({
+  budget_id: "budget-id",
+  transaction_id: "checking-payment-transaction-id",
+  payee_id: "credit-card-transfer-payee-id"
+})
+```
+
+**If both exist:** Delete one first, then update the other.
 
 ### Investment Account Transfer
 
 **Human Request:**
-> "I moved $2,000 to my investment account. The brokerage shows it as two separate transactions"
+> "I moved $2,000 to my investment account. I have transactions in both but they're not linked."
 
-**Claude Code Usage:**
+**Correct approach:**
 ```javascript
-ynab_link_transfer({
-  budget_id: "budget-id", 
-  transaction_id_1: "checking-to-investment-id", // -$2,000 from checking
-  transaction_id_2: "investment-inflow-id"       // +$2,000 to investment
+// Delete the investment inflow first
+ynab_delete_transaction({
+  budget_id: "budget-id",
+  transaction_id: "investment-inflow-id"
+})
+
+// Update checking transaction to create linked transfer
+ynab_update_transaction({
+  budget_id: "budget-id",
+  transaction_id: "checking-to-investment-id",
+  payee_id: "investment-transfer-payee-id"
 })
 ```
 
@@ -142,47 +140,29 @@ ynab_link_transfer({
 
 ## Creating Transfer Transactions
 
-### Manual Transfer Creation
+### Using ynab_create_transfer (Recommended)
 
 **Human Request:**
 > "Create a transfer of $300 from my checking account to savings"
 
-**Step 1: Create outflow transaction (checking account)**
+**Simple approach using ynab_create_transfer:**
 ```javascript
-ynab_create_transaction({
+ynab_create_transfer({
   budget_id: "budget-id",
-  account_id: "checking-account-id",
-  payee_name: "Transfer : Savings Account", 
-  category_id: null, // No category for transfers
-  amount: -300000, // -$300 (money leaving checking)
+  from_account_id: "checking-account-id",
+  to_account_id: "savings-account-id",
+  amount: 300000,  // $300 in milliunits (positive value)
   date: "2024-01-15",
-  memo: "Transfer to savings",
-  cleared: "cleared"
+  memo: "Transfer to savings"
 })
 ```
 
-**Step 2: Create inflow transaction (savings account)**
-```javascript
-ynab_create_transaction({
-  budget_id: "budget-id",
-  account_id: "savings-account-id", 
-  payee_name: "Transfer : Checking Account",
-  category_id: null, // No category for transfers
-  amount: 300000, // +$300 (money coming into savings)
-  date: "2024-01-15",
-  memo: "Transfer from checking", 
-  cleared: "cleared"
-})
-```
+This creates:
+- An outflow (-$300) in checking
+- An inflow (+$300) in savings
+- Both transactions are automatically linked as a transfer
 
-**Step 3: Link the transactions**
-```javascript
-ynab_link_transfer({
-  budget_id: "budget-id",
-  transaction_id_1: "new-checking-transaction-id",
-  transaction_id_2: "new-savings-transaction-id" 
-})
-```
+**WARNING:** This always creates NEW transactions. If matching transactions already exist, you'll create duplicates. Use `ynab_update_transaction` with `payee_id` instead when one side already exists.
 
 ### Split Transaction Transfer
 
@@ -265,17 +245,33 @@ ynab_unlink_transfer({
 **Step 1: Unlink incorrect transfer**
 ```javascript
 ynab_unlink_transfer({
-  budget_id: "budget-id", 
+  budget_id: "budget-id",
   transaction_id: "incorrectly-linked-transaction-id"
 })
 ```
 
 **Step 2: Link correct transactions**
+
+If only one transaction should become the transfer:
 ```javascript
-ynab_link_transfer({
+ynab_update_transaction({
   budget_id: "budget-id",
-  transaction_id_1: "correct-transaction-1-id",
-  transaction_id_2: "correct-transaction-2-id"
+  transaction_id: "correct-transaction-id",
+  payee_id: "destination-account-transfer-payee-id"
+})
+```
+
+If BOTH transactions exist and should be linked, delete one first:
+```javascript
+ynab_delete_transaction({
+  budget_id: "budget-id",
+  transaction_id: "one-transaction-to-delete"
+})
+
+ynab_update_transaction({
+  budget_id: "budget-id",
+  transaction_id: "remaining-transaction-id",
+  payee_id: "destination-account-transfer-payee-id"
 })
 ```
 
@@ -283,45 +279,36 @@ ynab_link_transfer({
 
 ## Transfer Validation
 
-### Validate Transfer Amounts
+### Validate Transfer Candidates
 
 **Human Request:**
 > "Check if these transactions can be linked as a valid transfer before I link them"
 
-**The `ynab_link_transfer` tool provides validation in its response:**
+**Before linking, manually verify:**
 
-```json
-{
-  "validation": {
-    "amounts_match": true,        // Amounts are equal (opposite signs)
-    "dates_match": true,         // Dates are the same or close
-    "is_valid_transfer": true    // Overall validation status
-  }
-}
+1. **Amounts must be equal and opposite** (e.g., -$500 and +$500)
+2. **Dates should be close** (within a few days for bank processing)
+3. **Different accounts** (can't transfer to same account)
+4. **Neither is already linked** to another transfer
+
+**Check existing links:**
+```javascript
+// Get transaction details
+ynab_get_transactions({
+  budget_id: "budget-id",
+  account_id: "account-id",
+  since_date: "2024-01-14"
+})
+// Check transfer_account_id and transfer_transaction_id fields
+// If populated, the transaction is already linked
 ```
 
 **Common Validation Issues:**
 
 1. **Amounts Don't Match:**
-```json
-{
-  "validation": {
-    "amounts_match": false,
-    "is_valid_transfer": false
-  }
-}
-```
 *Solution:* Check if one transaction includes fees or if amounts were entered incorrectly.
 
 2. **Dates Too Far Apart:**
-```json
-{
-  "validation": {
-    "dates_match": false,
-    "is_valid_transfer": false  
-  }
-}
-```
 *Solution:* Verify the dates are correct or if processing delays caused the difference.
 
 ### Handle Transfer Fees
@@ -362,7 +349,7 @@ ynab_update_transaction({
 
 // Create separate transaction for fee
 ynab_create_transaction({
-  budget_id: "budget-id", 
+  budget_id: "budget-id",
   account_id: "checking-account-id",
   payee_name: "Bank Transfer Fee",
   category_id: "banking-fees-category-id",
@@ -371,11 +358,18 @@ ynab_create_transaction({
   memo: "Transfer fee"
 })
 
-// Now link the transfer (amounts will match)
-ynab_link_transfer({
+// Now link the transfer by updating payee_id
+// First, delete the savings transaction if it exists
+ynab_delete_transaction({
   budget_id: "budget-id",
-  transaction_id_1: "updated-checking-transaction-id", // -$500
-  transaction_id_2: "savings-transaction-id"           // +$500
+  transaction_id: "savings-transaction-id"
+})
+
+// Then update checking transaction to create linked transfer
+ynab_update_transaction({
+  budget_id: "budget-id",
+  transaction_id: "updated-checking-transaction-id",
+  payee_id: "savings-transfer-payee-id"
 })
 ```
 
@@ -390,34 +384,17 @@ ynab_link_transfer({
 
 **Approach 1: Transfer to Cash Account**
 ```javascript
-// Create cash account if it doesn't exist, then:
-ynab_create_transaction({
+// Create cash account if it doesn't exist, then use ynab_create_transfer:
+ynab_create_transfer({
   budget_id: "budget-id",
-  account_id: "checking-account-id",
-  payee_name: "Transfer : Cash", 
-  category_id: null,
-  amount: -100000, // -$100 from checking
+  from_account_id: "checking-account-id",
+  to_account_id: "cash-account-id",
+  amount: 100000,  // $100 in milliunits
   date: "2024-01-15",
   memo: "ATM withdrawal"
-})
-
-ynab_create_transaction({
-  budget_id: "budget-id",
-  account_id: "cash-account-id",
-  payee_name: "Transfer : Checking Account",
-  category_id: null, 
-  amount: 100000, // +$100 to cash
-  date: "2024-01-15",
-  memo: "ATM withdrawal"
-})
-
-// Link as transfer
-ynab_link_transfer({
-  budget_id: "budget-id", 
-  transaction_id_1: "checking-atm-transaction-id",
-  transaction_id_2: "cash-inflow-transaction-id"
 })
 ```
+This creates both transactions and links them automatically.
 
 **Approach 2: Categorize as Spending**
 ```javascript
@@ -437,30 +414,29 @@ ynab_create_transaction({
 **Human Request:**
 > "I initiated a transfer on Monday, but it didn't process until Wednesday. The dates don't match"
 
-**Solution:**
+**Solution: When BOTH transactions exist:**
 ```javascript
-// Update one transaction to match the other's date
-ynab_update_transaction({
+// Step 1: Delete one transaction
+ynab_delete_transaction({
   budget_id: "budget-id",
-  transaction_id: "delayed-transaction-id",
-  date: "2024-01-15" // Match the initiation date
+  transaction_id: "wednesday-transaction-id"  // Delete the delayed one
 })
 
-// Then link the transfer
-ynab_link_transfer({
+// Step 2: Update the other to create the linked transfer
+ynab_update_transaction({
   budget_id: "budget-id",
-  transaction_id_1: "monday-transaction-id",
-  transaction_id_2: "updated-wednesday-transaction-id"
+  transaction_id: "monday-transaction-id",
+  payee_id: "destination-account-transfer-payee-id"
 })
 ```
 
-**Alternative: Keep original dates if preferred**
+**Alternative: If only one transaction exists:**
 ```javascript
-// Link despite date mismatch (validation will show dates_match: false)
-ynab_link_transfer({
-  budget_id: "budget-id", 
-  transaction_id_1: "monday-transaction-id", 
-  transaction_id_2: "wednesday-transaction-id"
+// Just update the payee_id - YNAB creates the matching transaction
+ynab_update_transaction({
+  budget_id: "budget-id",
+  transaction_id: "existing-transaction-id",
+  payee_id: "other-account-transfer-payee-id"
 })
 ```
 
@@ -560,14 +536,21 @@ ynab_create_transaction({
 // First unlink the existing transfer
 ynab_unlink_transfer({
   budget_id: "budget-id",
-  transaction_id: "already-linked-transaction-id" 
+  transaction_id: "already-linked-transaction-id"
 })
 
-// Then create the new link
-ynab_link_transfer({
+// Then create the new link by updating payee_id
+// If both transactions exist, delete one first:
+ynab_delete_transaction({
   budget_id: "budget-id",
-  transaction_id_1: "transaction-1-id", 
-  transaction_id_2: "transaction-2-id"
+  transaction_id: "one-of-the-transactions"
+})
+
+// Update the remaining transaction
+ynab_update_transaction({
+  budget_id: "budget-id",
+  transaction_id: "remaining-transaction-id",
+  payee_id: "destination-account-transfer-payee-id"
 })
 ```
 

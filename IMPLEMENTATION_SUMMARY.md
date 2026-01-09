@@ -16,7 +16,7 @@ Successfully implemented the remaining core management tools for the YNAB MCP se
 6. **ynab_create_payee** - Create a new payee with duplicate name conflict handling.
 
 ### Transfer Tools (`src/tools/transfers/`)
-7. **ynab_link_transfer** - Create transfers between accounts using transfer_payee_id with automatic matching transaction creation.
+7. **ynab_create_transfer** - Create new transfers between accounts using transfer_payee_id with automatic matching transaction creation. WARNING: Always creates new transactions, does not link existing ones.
 8. **ynab_unlink_transfer** - Break transfer links and convert to regular transactions.
 
 ### Budget Month Tools (`src/tools/months/`)

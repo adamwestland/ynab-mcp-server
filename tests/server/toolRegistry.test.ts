@@ -136,8 +136,8 @@ describe('Tool Registry', () => {
   });
 
   describe('Transfer tools', () => {
-    it('registers link_transfer tool', () => {
-      const tool = registeredTools.find(t => t.name === 'ynab_link_transfer');
+    it('registers create_transfer tool', () => {
+      const tool = registeredTools.find(t => t.name === 'ynab_create_transfer');
       expect(tool).toBeDefined();
     });
 

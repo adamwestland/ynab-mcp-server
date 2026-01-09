@@ -19,7 +19,7 @@ import { UpdateCategoryBudgetTool } from './categories/updateCategoryBudget.js';
 import { GetPayeesTool } from './payees/getPayees.js';
 import { GetPayeeTool } from './payees/getPayee.js';
 import { CreatePayeeTool } from './payees/createPayee.js';
-import { LinkTransferTool } from './transfers/linkTransfer.js';
+import { CreateTransferTool } from './transfers/createTransfer.js';
 import { UnlinkTransferTool } from './transfers/unlinkTransfer.js';
 import { GetBudgetMonthTool } from './months/getBudgetMonth.js';
 import { ImportTransactionsTool } from './imports/importTransactions.js';
@@ -66,7 +66,7 @@ export function registerTools(client: YNABClient): Tool[] {
     new CreatePayeeTool(client),
     
     // Transfer tools
-    new LinkTransferTool(client),
+    new CreateTransferTool(client),
     new UnlinkTransferTool(client),
     
     // Budget month tools
