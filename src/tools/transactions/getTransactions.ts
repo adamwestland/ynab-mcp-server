@@ -19,7 +19,7 @@ const GetTransactionsInputSchema = z.object({
   budget_id: z.string().describe('The ID of the budget to get transactions for'),
   account_id: z.string().optional().describe('Filter transactions to a specific account'),
   since_date: z.string().optional().describe('Only return transactions on or after this date (ISO format: YYYY-MM-DD)'),
-  type: z.enum(['uncategorized', 'unapproved']).optional().describe('Filter transactions by type'),
+  type: z.enum(['uncategorized', 'unapproved', 'needs_attention']).optional().describe('Filter transactions by type. "needs_attention" combines unapproved + uncategorized (excluding transfers) in one query.'),
   last_knowledge_of_server: z.number().optional().describe('Server knowledge for delta sync - only return data modified since this value'),
   category_id: z.string().optional().describe('Filter transactions to a specific category'),
   payee_id: z.string().optional().describe('Filter transactions to a specific payee'),
@@ -123,24 +123,61 @@ export class GetTransactionsTool extends YnabTool {
     try {
       let transactionsResponse: YnabTransactionsResponse;
 
-      // Get transactions - either from specific account or all accounts
-      const requestOptions = {
-        ...(input.since_date && { sinceDate: input.since_date }),
-        ...(input.type && { type: input.type }),
-        ...(input.last_knowledge_of_server !== undefined && { lastKnowledgeOfServer: input.last_knowledge_of_server }),
-      };
+      if (input.type === 'needs_attention') {
+        // Fetch both unapproved and uncategorized, merge and deduplicate
+        const baseOptions = {
+          ...(input.since_date && { sinceDate: input.since_date }),
+          ...(input.last_knowledge_of_server !== undefined && { lastKnowledgeOfServer: input.last_knowledge_of_server }),
+        };
 
-      if (input.account_id) {
-        transactionsResponse = await this.client.getAccountTransactions(
-          input.budget_id,
-          input.account_id,
-          requestOptions
+        const fetchFn = input.account_id
+          ? (opts: any) => this.client.getAccountTransactions(input.budget_id, input.account_id!, opts)
+          : (opts: any) => this.client.getTransactions(input.budget_id, opts);
+
+        const [unapprovedResponse, uncategorizedResponse] = await Promise.all([
+          fetchFn({ ...baseOptions, type: 'unapproved' }),
+          fetchFn({ ...baseOptions, type: 'uncategorized' }),
+        ]);
+
+        // Filter uncategorized to exclude transfers (they intentionally have no category)
+        const realUncategorized = uncategorizedResponse.transactions.filter(
+          (tx: any) => !tx.transfer_account_id
         );
+
+        // Merge and deduplicate by ID
+        const seen = new Set<string>();
+        const merged = [];
+        for (const tx of [...unapprovedResponse.transactions, ...realUncategorized]) {
+          if (!seen.has(tx.id)) {
+            seen.add(tx.id);
+            merged.push(tx);
+          }
+        }
+
+        transactionsResponse = {
+          transactions: merged,
+          server_knowledge: Math.max(unapprovedResponse.server_knowledge, uncategorizedResponse.server_knowledge),
+        };
       } else {
-        transactionsResponse = await this.client.getTransactions(
-          input.budget_id,
-          requestOptions
-        );
+        // Standard single-query path
+        const requestOptions = {
+          ...(input.since_date && { sinceDate: input.since_date }),
+          ...(input.type && { type: input.type }),
+          ...(input.last_knowledge_of_server !== undefined && { lastKnowledgeOfServer: input.last_knowledge_of_server }),
+        };
+
+        if (input.account_id) {
+          transactionsResponse = await this.client.getAccountTransactions(
+            input.budget_id,
+            input.account_id,
+            requestOptions
+          );
+        } else {
+          transactionsResponse = await this.client.getTransactions(
+            input.budget_id,
+            requestOptions
+          );
+        }
       }
 
       // Apply additional client-side filtering

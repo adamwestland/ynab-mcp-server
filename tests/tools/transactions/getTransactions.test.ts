@@ -423,4 +423,124 @@ describe('GetTransactionsTool', () => {
       })).rejects.toThrow();
     });
   });
+
+  describe('needs_attention filter', () => {
+    const accountId = 'acct-1';
+
+    it('returns unapproved transactions', async () => {
+      client.getTransactions
+        .mockResolvedValueOnce({
+          transactions: [
+            createMockTransaction({ id: 'unapproved-1', account_id: accountId, approved: false, category_id: 'cat-1' }),
+          ],
+          server_knowledge: 1,
+        })
+        .mockResolvedValueOnce({
+          transactions: [],
+          server_knowledge: 1,
+        });
+
+      const result = await tool.execute({ budget_id: 'test-budget', type: 'needs_attention' });
+
+      expect(result.transactions).toHaveLength(1);
+      expect(result.transactions[0].id).toBe('unapproved-1');
+    });
+
+    it('returns uncategorized non-transfer transactions', async () => {
+      client.getTransactions
+        .mockResolvedValueOnce({
+          transactions: [],
+          server_knowledge: 1,
+        })
+        .mockResolvedValueOnce({
+          transactions: [
+            createMockTransaction({ id: 'uncat-1', account_id: accountId, category_id: null, transfer_account_id: null }),
+          ],
+          server_knowledge: 1,
+        });
+
+      const result = await tool.execute({ budget_id: 'test-budget', type: 'needs_attention' });
+
+      expect(result.transactions).toHaveLength(1);
+      expect(result.transactions[0].id).toBe('uncat-1');
+    });
+
+    it('excludes uncategorized transfers', async () => {
+      client.getTransactions
+        .mockResolvedValueOnce({
+          transactions: [],
+          server_knowledge: 1,
+        })
+        .mockResolvedValueOnce({
+          transactions: [
+            createMockTransaction({ id: 'transfer-1', account_id: accountId, category_id: null, transfer_account_id: 'acct-2' }),
+            createMockTransaction({ id: 'real-uncat', account_id: accountId, category_id: null, transfer_account_id: null }),
+          ],
+          server_knowledge: 1,
+        });
+
+      const result = await tool.execute({ budget_id: 'test-budget', type: 'needs_attention' });
+
+      expect(result.transactions).toHaveLength(1);
+      expect(result.transactions[0].id).toBe('real-uncat');
+    });
+
+    it('deduplicates transactions that are both unapproved and uncategorized', async () => {
+      const bothTx = createMockTransaction({ id: 'both-1', account_id: accountId, approved: false, category_id: null, transfer_account_id: null });
+
+      client.getTransactions
+        .mockResolvedValueOnce({
+          transactions: [bothTx],
+          server_knowledge: 1,
+        })
+        .mockResolvedValueOnce({
+          transactions: [bothTx],
+          server_knowledge: 1,
+        });
+
+      const result = await tool.execute({ budget_id: 'test-budget', type: 'needs_attention' });
+
+      expect(result.transactions).toHaveLength(1);
+      expect(result.transactions[0].id).toBe('both-1');
+    });
+
+    it('works with account_id filter', async () => {
+      client.getAccountTransactions
+        .mockResolvedValueOnce({
+          transactions: [
+            createMockTransaction({ id: 'unapproved-1', account_id: accountId, approved: false }),
+          ],
+          server_knowledge: 1,
+        })
+        .mockResolvedValueOnce({
+          transactions: [],
+          server_knowledge: 1,
+        });
+
+      const result = await tool.execute({ budget_id: 'test-budget', type: 'needs_attention', account_id: accountId });
+
+      expect(client.getAccountTransactions).toHaveBeenCalledTimes(2);
+      expect(result.transactions).toHaveLength(1);
+    });
+
+    it('works with compact mode', async () => {
+      client.getTransactions
+        .mockResolvedValueOnce({
+          transactions: [
+            createMockTransaction({ id: 'tx-1', approved: false, flag_color: 'red', import_id: 'imp-1' }),
+          ],
+          server_knowledge: 1,
+        })
+        .mockResolvedValueOnce({
+          transactions: [],
+          server_knowledge: 1,
+        });
+
+      const result = await tool.execute({ budget_id: 'test-budget', type: 'needs_attention', compact: true });
+      const tx = result.transactions[0] as Record<string, unknown>;
+
+      expect(tx).not.toHaveProperty('flag');
+      expect(tx).not.toHaveProperty('import_info');
+    });
+  });
 });
