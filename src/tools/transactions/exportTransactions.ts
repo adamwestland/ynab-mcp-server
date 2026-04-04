@@ -5,8 +5,9 @@ import type { YnabTransactionsResponse } from '../../types/index.js';
 
 const ExportTransactionsInputSchema = z.object({
   budget_id: z.string().describe('The ID of the budget to export transactions from'),
-  account_id: z.string().optional().describe('Filter to a specific account'),
+  account_id: z.string().describe('The account ID to export transactions for'),
   since_date: z.string().optional().describe('Only return transactions on or after this date (YYYY-MM-DD)'),
+  all_accounts: z.boolean().optional().default(false).describe('If true, ignore account_id and export all transactions across all accounts'),
   output_path: z.string().optional().describe('If provided, write CSV to this file path and return a summary instead of the full CSV. Useful for large accounts.'),
 });
 
@@ -42,7 +43,7 @@ const CSV_HEADERS = [
  */
 export class ExportTransactionsTool extends YnabTool {
   name = 'ynab_export_transactions_csv';
-  description = 'Export all transactions for a budget or account as a compact CSV string. Returns flat rows with amounts in dollars — much smaller than the JSON format. Optionally writes to a file. No row limit.';
+  description = 'Export all transactions for a single account as a compact CSV string. Requires account_id. Returns flat rows with amounts in dollars — much smaller than the JSON format. Optionally writes to a file. No row limit. Set all_accounts=true to export across all accounts.';
   inputSchema = ExportTransactionsInputSchema;
 
   async execute(args: unknown): Promise<string | {
@@ -59,15 +60,15 @@ export class ExportTransactionsTool extends YnabTool {
       };
 
       let response: YnabTransactionsResponse;
-      if (input.account_id) {
-        response = await this.client.getAccountTransactions(
+      if (input.all_accounts) {
+        response = await this.client.getTransactions(
           input.budget_id,
-          input.account_id,
           requestOptions,
         );
       } else {
-        response = await this.client.getTransactions(
+        response = await this.client.getAccountTransactions(
           input.budget_id,
+          input.account_id,
           requestOptions,
         );
       }
