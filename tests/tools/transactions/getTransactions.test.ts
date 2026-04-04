@@ -283,4 +283,144 @@ describe('GetTransactionsTool', () => {
         .rejects.toThrow('get transactions failed');
     });
   });
+
+  describe('compact mode', () => {
+    const COMPACT_KEYS = ['id', 'date', 'amount', 'memo', 'payee', 'category', 'account', 'cleared', 'approved'];
+
+    beforeEach(() => {
+      client.getTransactions.mockResolvedValue({
+        transactions: [createMockTransaction({
+          id: 'tx-1',
+          amount: -50000,
+          flag_color: 'red',
+          import_id: 'import-1',
+          import_payee_name: 'Original',
+          transfer_account_id: 'acct-2',
+          transfer_transaction_id: 'tx-linked',
+        })],
+        server_knowledge: 1,
+      });
+    });
+
+    it('returns only compact fields when compact=true', async () => {
+      const result = await tool.execute({ budget_id: 'test-budget', compact: true });
+      const tx = result.transactions[0];
+      const keys = Object.keys(tx);
+
+      expect(keys.sort()).toEqual(COMPACT_KEYS.sort());
+    });
+
+    it('omits transfer, flag, import_info, matched_transaction_id, debt_transaction_type when compact=true', async () => {
+      const result = await tool.execute({ budget_id: 'test-budget', compact: true });
+      const tx = result.transactions[0] as Record<string, unknown>;
+
+      expect(tx).not.toHaveProperty('transfer');
+      expect(tx).not.toHaveProperty('flag');
+      expect(tx).not.toHaveProperty('import_info');
+      expect(tx).not.toHaveProperty('matched_transaction_id');
+      expect(tx).not.toHaveProperty('debt_transaction_type');
+    });
+
+    it('omits subtransactions when compact=true even for split transactions', async () => {
+      const splitTx = createMockSplitTransaction(2);
+      client.getTransactions.mockResolvedValue({
+        transactions: [splitTx],
+        server_knowledge: 1,
+      });
+
+      const result = await tool.execute({ budget_id: 'test-budget', compact: true });
+      const tx = result.transactions[0] as Record<string, unknown>;
+
+      expect(tx).not.toHaveProperty('subtransactions');
+    });
+
+    it('returns all fields when compact=false (default behavior)', async () => {
+      const result = await tool.execute({ budget_id: 'test-budget', compact: false });
+      const tx = result.transactions[0] as Record<string, unknown>;
+
+      expect(tx).toHaveProperty('transfer');
+      expect(tx).toHaveProperty('flag');
+      expect(tx).toHaveProperty('import_info');
+    });
+  });
+
+  describe('fields parameter', () => {
+    beforeEach(() => {
+      client.getTransactions.mockResolvedValue({
+        transactions: [createMockTransaction({
+          id: 'tx-1',
+          amount: -50000,
+          flag_color: 'blue',
+          import_id: 'imp-1',
+          transfer_account_id: 'acct-2',
+          transfer_transaction_id: 'tx-linked',
+        })],
+        server_knowledge: 1,
+      });
+    });
+
+    it('returns only specified fields', async () => {
+      const result = await tool.execute({
+        budget_id: 'test-budget',
+        fields: ['id', 'date', 'amount'],
+      });
+      const tx = result.transactions[0];
+      const keys = Object.keys(tx);
+
+      expect(keys.sort()).toEqual(['amount', 'date', 'id']);
+    });
+
+    it('fields takes precedence over compact', async () => {
+      const result = await tool.execute({
+        budget_id: 'test-budget',
+        compact: true,
+        fields: ['id', 'amount'],
+      });
+      const tx = result.transactions[0];
+      const keys = Object.keys(tx);
+
+      expect(keys.sort()).toEqual(['amount', 'id']);
+    });
+
+    it('includes subtransactions when requested in fields', async () => {
+      const splitTx = createMockSplitTransaction(2);
+      client.getTransactions.mockResolvedValue({
+        transactions: [splitTx],
+        server_knowledge: 1,
+      });
+
+      const result = await tool.execute({
+        budget_id: 'test-budget',
+        fields: ['id', 'subtransactions'],
+      });
+      const tx = result.transactions[0] as Record<string, unknown>;
+
+      expect(tx).toHaveProperty('subtransactions');
+      expect(Object.keys(tx).sort()).toEqual(['id', 'subtransactions']);
+    });
+
+    it('excludes subtransactions when not in fields even if include_subtransactions=true', async () => {
+      const splitTx = createMockSplitTransaction(2);
+      client.getTransactions.mockResolvedValue({
+        transactions: [splitTx],
+        server_knowledge: 1,
+      });
+
+      const result = await tool.execute({
+        budget_id: 'test-budget',
+        fields: ['id', 'amount'],
+        include_subtransactions: true,
+      });
+      const tx = result.transactions[0] as Record<string, unknown>;
+
+      expect(tx).not.toHaveProperty('subtransactions');
+    });
+
+    it('rejects empty fields array', async () => {
+      await expect(tool.execute({
+        budget_id: 'test-budget',
+        fields: [],
+      })).rejects.toThrow();
+    });
+  });
 });

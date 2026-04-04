@@ -109,6 +109,19 @@ Environment variables:
 - `YNAB_API_TOKEN` (required) - Your YNAB API token
 - `YNAB_BASE_URL` - API base URL (default: https://api.youneedabudget.com/v1)
 
+## Development Workflow — Red/Green TDD
+
+All new features and bug fixes must follow red/green TDD:
+
+1. **Red**: Write failing tests first that describe the expected behavior
+2. **Green**: Write the minimum implementation to make tests pass
+3. **Refactor**: Clean up while keeping tests green
+
+Run tests continuously during development:
+```bash
+npm run test:watch   # Watch mode — re-runs on file changes
+```
+
 ## Testing
 
 ### Test Structure

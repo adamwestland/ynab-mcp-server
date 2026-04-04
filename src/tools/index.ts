@@ -6,6 +6,7 @@ export * from './base.js';
 // Import tool implementations
 import { ListBudgetsTool } from './budgets/listBudgets.js';
 import { GetAccountsTool } from './accounts/getAccounts.js';
+import { GetAccountSummaryTool } from './accounts/getAccountSummary.js';
 import { GetTransactionsTool } from './transactions/getTransactions.js';
 import { CreateTransactionTool } from './transactions/createTransaction.js';
 import { UpdateTransactionTool } from './transactions/updateTransaction.js';
@@ -46,6 +47,7 @@ export function registerTools(client: YNABClient): Tool[] {
     
     // Account tools
     new GetAccountsTool(client),
+    new GetAccountSummaryTool(client),
     
     // Transaction tools
     new GetTransactionsTool(client),
