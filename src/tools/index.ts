@@ -15,6 +15,7 @@ import { BatchUpdateTransactionsTool } from './transactions/batchUpdateTransacti
 import { CreateSplitTransactionTool } from './transactions/createSplitTransaction.js';
 import { UpdateTransactionSplitsTool } from './transactions/updateTransactionSplits.js';
 import { ExportTransactionsTool } from './transactions/exportTransactions.js';
+import { FindTransferCounterpartTool } from './transactions/findTransferCounterpart.js';
 import { GetCategoriesTool } from './categories/getCategories.js';
 import { GetCategoryTool } from './categories/getCategory.js';
 import { UpdateCategoryBudgetTool } from './categories/updateCategoryBudget.js';
@@ -58,7 +59,8 @@ export function registerTools(client: YNABClient): Tool[] {
     new CreateSplitTransactionTool(client),
     new UpdateTransactionSplitsTool(client),
     new ExportTransactionsTool(client),
-    
+    new FindTransferCounterpartTool(client),
+
     // Category tools
     new GetCategoriesTool(client),
     new GetCategoryTool(client),
