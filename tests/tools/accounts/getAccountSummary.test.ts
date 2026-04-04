@@ -215,6 +215,36 @@ describe('GetAccountSummaryTool', () => {
       expect(client.getTransactions).toHaveBeenNthCalledWith(2, 'test-budget', { type: 'uncategorized' });
     });
 
+    it('excludes on-budget transfers from uncategorized counts', async () => {
+      const acct = createMockAccount({ id: 'acct-1', name: 'Checking' });
+
+      client.getAccounts.mockResolvedValue({
+        accounts: [acct],
+        server_knowledge: 1,
+      });
+
+      // No unapproved
+      client.getTransactions.mockResolvedValueOnce({
+        transactions: [],
+        server_knowledge: 1,
+      });
+
+      // Uncategorized: 3 total, but 2 are transfers (should be excluded)
+      client.getTransactions.mockResolvedValueOnce({
+        transactions: [
+          createMockTransaction({ account_id: 'acct-1', category_id: null, transfer_account_id: null }),
+          createMockTransaction({ account_id: 'acct-1', category_id: null, transfer_account_id: 'acct-2' }),
+          createMockTransaction({ account_id: 'acct-1', category_id: null, transfer_account_id: 'acct-3' }),
+        ],
+        server_knowledge: 1,
+      });
+
+      const result = await tool.execute({ budget_id: 'test-budget' });
+
+      expect(result.accounts[0].uncategorized_count).toBe(1);
+      expect(result.totals.total_uncategorized).toBe(1);
+    });
+
     it('handles API errors gracefully', async () => {
       client.getAccounts.mockRejectedValue(new Error('API error'));
 

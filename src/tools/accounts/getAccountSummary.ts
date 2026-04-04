@@ -33,6 +33,7 @@ export class GetAccountSummaryTool extends YnabTool {
 
       const uncategorizedByAccount = new Map<string, number>();
       for (const tx of uncategorizedResponse.transactions) {
+        if (tx.transfer_account_id) continue; // on-budget transfers intentionally have no category
         uncategorizedByAccount.set(tx.account_id, (uncategorizedByAccount.get(tx.account_id) ?? 0) + 1);
       }
 
