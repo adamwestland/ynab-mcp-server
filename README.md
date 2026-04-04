@@ -90,8 +90,9 @@ This server provides **30+ specialized tools** organized into these categories:
 - `ynab_get_accounts` - Retrieve account details, balances, and settings
 - `ynab_get_budget_month` - Get monthly budget data with category allocations
 
-### Transaction Management (9 tools)
+### Transaction Management (10 tools)
 - `ynab_get_transactions` - Query transactions with advanced filtering
+- `ynab_export_transactions_csv` - Export account transactions as compact CSV (no row limit)
 - `ynab_create_transaction` - Create individual transactions
 - `ynab_update_transaction` - Update existing transactions
 - `ynab_delete_transaction` - Remove transactions
@@ -140,6 +141,14 @@ await tools.ynab_get_transactions({
   budget_id: "your-budget-id",
   since_date: "2024-01-01",
   limit: 100
+});
+
+// Export account transactions as CSV (no row limit)
+await tools.ynab_export_transactions_csv({
+  budget_id: "your-budget-id",
+  account_id: "account-id",           // required
+  output_path: "/tmp/transactions.csv" // optional — omit to get CSV string directly
+  // all_accounts: true               // optional — ignore account_id, export everything
 });
 ```
 
