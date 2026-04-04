@@ -5,6 +5,16 @@ import type { YnabTransactionsResponse } from '../../types/index.js';
 /**
  * Input schema for the get transactions tool
  */
+const VALID_FIELDS = [
+  'id', 'date', 'amount', 'memo', 'payee', 'category', 'account',
+  'transfer', 'cleared', 'approved', 'flag', 'import_info',
+  'matched_transaction_id', 'debt_transaction_type', 'subtransactions',
+] as const;
+
+const COMPACT_FIELDS: readonly string[] = [
+  'id', 'date', 'amount', 'memo', 'payee', 'category', 'account', 'cleared', 'approved',
+];
+
 const GetTransactionsInputSchema = z.object({
   budget_id: z.string().describe('The ID of the budget to get transactions for'),
   account_id: z.string().optional().describe('Filter transactions to a specific account'),
@@ -16,6 +26,8 @@ const GetTransactionsInputSchema = z.object({
   cleared_status: z.enum(['cleared', 'uncleared', 'reconciled']).optional().describe('Filter by cleared status'),
   include_subtransactions: z.boolean().optional().default(true).describe('Include subtransactions for split transactions'),
   limit: z.number().int().min(1).max(1000).optional().describe('Maximum number of transactions to return (max 1000)'),
+  compact: z.boolean().optional().default(false).describe('When true, returns minimal fields: id, date, amount, memo, payee, category, account, cleared, approved. Reduces response size.'),
+  fields: z.array(z.enum(VALID_FIELDS)).min(1).optional().describe('Explicit list of fields to include per transaction. Takes precedence over compact. Reduces response size for large result sets.'),
 });
 
 type GetTransactionsInput = z.infer<typeof GetTransactionsInputSchema>;
@@ -33,7 +45,7 @@ type GetTransactionsInput = z.infer<typeof GetTransactionsInputSchema>;
  */
 export class GetTransactionsTool extends YnabTool {
   name = 'ynab_get_transactions';
-  description = 'Get transactions with comprehensive filtering options. Supports date filtering, account filtering, category/payee filtering, and delta sync. Includes subtransactions for splits and transfer information.';
+  description = 'Get transactions with comprehensive filtering options. Supports date filtering, account filtering, category/payee filtering, and delta sync. Use "compact: true" for a minimal field set, or "fields" to choose exactly which fields to return (reduces response size for large result sets).';
   inputSchema = GetTransactionsInputSchema;
 
   /**
@@ -236,13 +248,27 @@ export class GetTransactionsTool extends YnabTool {
         return baseTransaction;
       });
 
+      // Apply field projection if compact or fields specified
+      const effectiveFields = input.fields ?? (input.compact ? COMPACT_FIELDS : null);
+      const projectedTransactions = effectiveFields
+        ? processedTransactions.map(tx => {
+            const projected: Record<string, unknown> = {};
+            for (const field of effectiveFields) {
+              if (field in tx) {
+                projected[field] = (tx as Record<string, unknown>)[field];
+              }
+            }
+            return projected;
+          })
+        : processedTransactions;
+
       // Sort transactions by date (newest first)
-      const sortedTransactions = processedTransactions.sort((a, b) => 
-        new Date(b.date).getTime() - new Date(a.date).getTime()
+      const sortedTransactions = projectedTransactions.sort((a, b) =>
+        new Date((b as any).date).getTime() - new Date((a as any).date).getTime()
       );
 
       return {
-        transactions: sortedTransactions,
+        transactions: sortedTransactions as any,
         server_knowledge: transactionsResponse.server_knowledge,
         filtered_count: sortedTransactions.length,
         has_more: input.limit ? sortedTransactions.length === input.limit : false,
