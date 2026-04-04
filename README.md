@@ -92,7 +92,7 @@ This server provides **30+ specialized tools** organized into these categories:
 
 ### Transaction Management (10 tools)
 - `ynab_get_transactions` - Query transactions with advanced filtering
-- `ynab_export_transactions_csv` - Export all transactions as compact CSV (no row limit)
+- `ynab_export_transactions_csv` - Export account transactions as compact CSV (no row limit)
 - `ynab_create_transaction` - Create individual transactions
 - `ynab_update_transaction` - Update existing transactions
 - `ynab_delete_transaction` - Remove transactions
@@ -143,11 +143,12 @@ await tools.ynab_get_transactions({
   limit: 100
 });
 
-// Export all account transactions as CSV (no row limit)
+// Export account transactions as CSV (no row limit)
 await tools.ynab_export_transactions_csv({
   budget_id: "your-budget-id",
-  account_id: "account-id",
-  output_path: "/tmp/transactions.csv"  // optional — omit to get CSV string directly
+  account_id: "account-id",           // required
+  output_path: "/tmp/transactions.csv" // optional — omit to get CSV string directly
+  // all_accounts: true               // optional — ignore account_id, export everything
 });
 ```
 
