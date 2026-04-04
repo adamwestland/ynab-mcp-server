@@ -109,6 +109,15 @@ Environment variables:
 - `YNAB_API_TOKEN` (required) - Your YNAB API token
 - `YNAB_BASE_URL` - API base URL (default: https://api.youneedabudget.com/v1)
 
+## Versioning
+
+Follow [semver](https://semver.org/) in `package.json`:
+- **Patch** (1.0.x): Bug fixes, docs-only changes
+- **Minor** (1.x.0): New tools, new parameters on existing tools (non-breaking)
+- **Major** (x.0.0): Renamed/removed tools, changed return shapes, breaking parameter changes
+
+Bump the version in the same commit as the feature/fix. Include the version in the commit message (e.g., `bump to v1.1.0`).
+
 ## Development Workflow — Red/Green TDD
 
 All new features and bug fixes must follow red/green TDD:

@@ -90,9 +90,10 @@ This server provides **30+ specialized tools** organized into these categories:
 - `ynab_get_accounts` - Retrieve account details, balances, and settings
 - `ynab_get_budget_month` - Get monthly budget data with category allocations
 
-### Transaction Management (10 tools)
+### Transaction Management (11 tools)
 - `ynab_get_transactions` - Query transactions with advanced filtering
 - `ynab_export_transactions_csv` - Export account transactions as compact CSV (no row limit)
+- `ynab_find_transfer_counterpart` - Search other accounts for the opposite side of a potential transfer
 - `ynab_create_transaction` - Create individual transactions
 - `ynab_update_transaction` - Update existing transactions
 - `ynab_delete_transaction` - Remove transactions
