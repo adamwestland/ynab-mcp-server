@@ -141,9 +141,10 @@ export class CreateScheduledTransactionTool extends YnabTool {
       }
 
       // Prepare scheduled transaction data
+      // Note: YNAB API expects `date` (not `date_first`) in request body
       const scheduledTransactionData: SaveScheduledTransaction = {
         account_id: input.account_id,
-        date_first: input.date_first,
+        date: input.date_first,
         amount: input.amount,
         frequency: input.frequency,
         memo: input.memo || null,

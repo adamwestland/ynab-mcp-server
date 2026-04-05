@@ -126,6 +126,27 @@ describe('CreateScheduledTransactionTool', () => {
     expect(result.scheduled_transaction.id).toBe('st-new');
   });
 
+  it('sends "date" (not "date_first") to the YNAB API', async () => {
+    // YNAB POST /scheduled_transactions expects the field name `date`, not `date_first`.
+    // Responses return `date_first`/`date_next`, but the request body must use `date`.
+    const mockStx = createMockScheduledTransaction({ id: 'st-new', frequency: 'monthly' });
+    client.createScheduledTransaction.mockResolvedValue({
+      scheduled_transaction: mockStx,
+    });
+
+    await tool.execute({
+      budget_id: 'test-budget',
+      account_id: 'test-account',
+      date_first: '2024-02-01',
+      frequency: 'monthly',
+      amount: -50000,
+    });
+
+    const [, payload] = client.createScheduledTransaction.mock.calls[0];
+    expect(payload).toHaveProperty('date', '2024-02-01');
+    expect(payload).not.toHaveProperty('date_first');
+  });
+
   it('handles API errors gracefully', async () => {
     client.createScheduledTransaction.mockRejectedValue(new Error('API error'));
     await expect(tool.execute({
@@ -171,6 +192,24 @@ describe('UpdateScheduledTransactionTool', () => {
     expect(client.updateScheduledTransaction).toHaveBeenCalled();
     // The tool wraps amount in an object with milliunits and formatted
     expect(result.scheduled_transaction.amount.milliunits).toBe(-75000);
+  });
+
+  it('sends "date" (not "date_first") to the YNAB API when updating date', async () => {
+    // Same as create: PATCH body must use `date`, not `date_first`.
+    const mockStx = createMockScheduledTransaction({ id: 'st-1' });
+    client.updateScheduledTransaction.mockResolvedValue({
+      scheduled_transaction: mockStx,
+    });
+
+    await tool.execute({
+      budget_id: 'test-budget',
+      scheduled_transaction_id: 'st-1',
+      date_first: '2024-03-15',
+    });
+
+    const [, , payload] = client.updateScheduledTransaction.mock.calls[0];
+    expect(payload).toHaveProperty('date', '2024-03-15');
+    expect(payload).not.toHaveProperty('date_first');
   });
 
   it('handles API errors gracefully', async () => {

@@ -328,8 +328,10 @@ export interface UpdateTransactionWithId extends UpdateTransaction {
 export interface SaveScheduledTransaction {
   /** Account ID (required) */
   account_id: string;
-  /** First date in ISO format YYYY-MM-DD (required, max 5 years in future) */
-  date_first: string;
+  /** First date in ISO format YYYY-MM-DD (required, max 5 years in future).
+   *  NOTE: YNAB's POST/PATCH API expects this field to be named `date`, not `date_first`
+   *  (even though responses return `date_first`/`date_next`). */
+  date: string;
   /** Amount in milliunits */
   amount?: number;
   /** Payee ID */
