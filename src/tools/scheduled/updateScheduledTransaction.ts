@@ -141,7 +141,8 @@ export class UpdateScheduledTransactionTool extends YnabTool {
       }
 
       if (input.date_first !== undefined) {
-        updateData.date_first = input.date_first;
+        // Note: YNAB API expects `date` (not `date_first`) in request body
+        updateData.date = input.date_first;
       }
 
       if (input.frequency !== undefined) {
