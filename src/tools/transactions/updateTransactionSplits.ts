@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { YnabTool } from '../base.js';
-import type { YnabTransactionsResponse, YnabPayeesResponse, UpdateTransactionWithId, UpdateSubTransaction } from '../../types/index.js';
+import type { YnabTransactionResponse, YnabTransactionsResponse, YnabPayeesResponse, UpdateTransaction, UpdateSubTransaction, ClearedStatus, FlagColor, SaveTransaction } from '../../types/index.js';
 
 /**
  * Schema for updating or adding a subtransaction
@@ -198,10 +198,12 @@ export class UpdateTransactionSplitsTool extends YnabTool {
         }
       }
 
-      // Determine operation type and build update data
-      const updateData: UpdateTransactionWithId = {
-        id: input.transaction_id,
-      };
+      // Determine operation type and build update data.
+      // NOTE: We must use the single-transaction PATCH endpoint
+      // (PATCH /budgets/{id}/transactions/{txn_id}) rather than the bulk
+      // endpoint. YNAB's bulk PATCH does NOT accept a `subtransactions` field
+      // and silently drops it, so subtransaction mutations never persist.
+      const updateData: UpdateTransaction = {};
 
       if (input.convert_to_regular) {
         // Convert split transaction to regular transaction
@@ -296,7 +298,6 @@ export class UpdateTransactionSplitsTool extends YnabTool {
             memo: sub.memo !== undefined ? sub.memo : null,
           };
 
-          // Include ID if updating existing subtransaction
           if (sub.subtransaction_id) {
             processedSub.id = sub.subtransaction_id;
             subtransactionsUpdated++;
@@ -312,8 +313,6 @@ export class UpdateTransactionSplitsTool extends YnabTool {
         // Handle removal of subtransactions
         if (input.remove_subtransaction_ids && input.remove_subtransaction_ids.length > 0) {
           subtransactionsRemoved = input.remove_subtransaction_ids.length;
-          // Note: YNAB API handles removal by omitting subtransactions from the array
-          // The API will remove any existing subtransactions not included in the new array
         }
 
       } else {
@@ -331,17 +330,72 @@ export class UpdateTransactionSplitsTool extends YnabTool {
       if (input.approved !== undefined) updateData.approved = input.approved;
       if (input.flag_color !== undefined) updateData.flag_color = input.flag_color;
 
-      // Execute the update
-      const response: YnabTransactionsResponse = await this.client.updateTransactions(
-        input.budget_id,
-        [updateData]
-      );
+      // Choose the right strategy based on whether we're modifying an existing
+      // split's subtransactions. YNAB's PATCH endpoint silently ignores the
+      // subtransactions array on existing split transactions, so the only way
+      // to change subtxn fields is to delete the old transaction and recreate
+      // it with the new subtransactions.
+      let transaction;
+      let serverKnowledge: number;
 
-      if (!response.transactions || response.transactions.length === 0) {
-        throw new Error('No transaction returned from YNAB API after update');
+      if (isCurrentlySplit && updateData.subtransactions && updateData.subtransactions.length > 0) {
+        // DELETE + RECREATE: the only way to modify subtxn categories/memos
+        // on an existing split via the public YNAB API.
+        const newTxnData: SaveTransaction = {
+          account_id: currentTransaction.account_id,
+          date: input.date ?? currentTransaction.date,
+          amount: updateData.amount ?? currentTransaction.amount,
+          payee_id: updateData.payee_id ?? currentTransaction.payee_id,
+          payee_name: input.payee_name ?? currentTransaction.payee_name,
+          memo: input.memo !== undefined ? input.memo : currentTransaction.memo,
+          cleared: (input.cleared ?? currentTransaction.cleared) as ClearedStatus | null,
+          approved: input.approved ?? currentTransaction.approved,
+          flag_color: (input.flag_color !== undefined ? input.flag_color : currentTransaction.flag_color) as FlagColor,
+          // Generate a new import_id to avoid duplicate rejection.
+          // The original import_id is still in YNAB's dedup history even
+          // after deletion, so reusing it would cause the create to be
+          // silently treated as a duplicate.
+          import_id: `split_recreate_${Date.now()}`,
+          subtransactions: updateData.subtransactions.map(sub => ({
+            amount: sub.amount,
+            category_id: sub.category_id ?? null,
+            payee_id: sub.payee_id ?? null,
+            memo: sub.memo ?? null,
+          })),
+        };
+
+        // Step 1: Delete old transaction
+        await this.client.delete(`/budgets/${input.budget_id}/transactions/${input.transaction_id}`);
+
+        // Step 2: Create new transaction with updated subtransactions
+        const createResponse: YnabTransactionsResponse = await this.client.createTransactions(
+          input.budget_id,
+          [newTxnData]
+        );
+
+        if (!createResponse.transactions || createResponse.transactions.length === 0) {
+          throw new Error('Failed to recreate transaction after delete');
+        }
+
+        transaction = createResponse.transactions[0]!;
+        serverKnowledge = createResponse.server_knowledge;
+
+      } else {
+        // PATCH: works for converting regular→split, split→regular, and
+        // main-field-only updates on existing splits.
+        const response: YnabTransactionResponse = await this.client.updateTransaction(
+          input.budget_id,
+          input.transaction_id,
+          updateData
+        );
+
+        if (!response.transaction) {
+          throw new Error('No transaction returned from YNAB API after update');
+        }
+
+        transaction = response.transaction;
+        serverKnowledge = response.server_knowledge;
       }
-
-      const transaction = response.transactions[0]!;
       const isSplit = !!(transaction.subtransactions && transaction.subtransactions.length > 0);
 
       const result: any = {
@@ -405,7 +459,7 @@ export class UpdateTransactionSplitsTool extends YnabTool {
       return {
         transaction: result,
         created_payees: createdPayees,
-        server_knowledge: response.server_knowledge,
+        server_knowledge: serverKnowledge,
         operation_summary: {
           operation_type: operationType,
           subtransactions_added: subtransactionsAdded,
