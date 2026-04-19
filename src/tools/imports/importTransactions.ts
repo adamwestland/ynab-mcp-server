@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { YnabTool } from '../base.js';
+import { assertPayeeNameAllowed } from '../common/reservedPayees.js';
 import type { YnabTransactionsResponse } from '../../types/index.js';
 
 /**
@@ -93,6 +94,11 @@ export class ImportTransactionsTool extends YnabTool {
     const input = this.validateArgs<ImportTransactionsInput>(args);
 
     try {
+      // Reject reserved YNAB payee names early with a clear error (issue #11)
+      for (const tx of input.transactions) {
+        assertPayeeNameAllowed(tx.payee_name);
+      }
+
       // Validate unique import_ids within the batch
       const importIds = input.transactions.map(tx => tx.import_id);
       const uniqueImportIds = new Set(importIds);

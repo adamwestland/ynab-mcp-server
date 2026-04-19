@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { YnabTool } from '../base.js';
+import { assertPayeeNameAllowed } from '../common/reservedPayees.js';
 import type { YnabTransactionsResponse, YnabPayeesResponse, YnabTransaction, UpdateTransactionWithId } from '../../types/index.js';
 
 /**
@@ -107,6 +108,9 @@ export class BatchUpdateTransactionsTool extends YnabTool {
     }>;
   }> {
     const input = this.validateArgs<BatchUpdateTransactionsInput>(args);
+    for (const tx of input.transactions) {
+      assertPayeeNameAllowed(tx.payee_name);
+    }
 
     try {
       const allUpdatedTransactions: YnabTransaction[] = [];

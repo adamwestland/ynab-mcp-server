@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { YnabTool } from '../base.js';
+import { assertPayeeNameAllowed } from '../common/reservedPayees.js';
 import type { YnabTransactionResponse, YnabTransactionsResponse, YnabPayeesResponse, UpdateTransaction, UpdateSubTransaction, ClearedStatus, FlagColor, SaveTransaction } from '../../types/index.js';
 
 /**
@@ -132,6 +133,10 @@ export class UpdateTransactionSplitsTool extends YnabTool {
     };
   }> {
     const input = this.validateArgs<UpdateTransactionSplitsInput>(args);
+    assertPayeeNameAllowed(input.payee_name);
+    for (const sub of input.subtransactions ?? []) {
+      assertPayeeNameAllowed(sub.payee_name);
+    }
 
     try {
       // First, get the current transaction to understand its current state

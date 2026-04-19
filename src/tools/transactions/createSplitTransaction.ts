@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { YnabTool } from '../base.js';
+import { assertPayeeNameAllowed } from '../common/reservedPayees.js';
 import type { YnabTransactionsResponse, YnabPayeesResponse, SaveTransaction } from '../../types/index.js';
 
 /**
@@ -117,6 +118,10 @@ export class CreateSplitTransactionTool extends YnabTool {
     };
   }> {
     const input = this.validateArgs<CreateSplitTransactionInput>(args);
+    assertPayeeNameAllowed(input.payee_name);
+    for (const sub of input.subtransactions) {
+      assertPayeeNameAllowed(sub.payee_name);
+    }
 
     try {
       // Validate that subtransactions sum to total amount
