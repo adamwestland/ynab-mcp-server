@@ -17,7 +17,7 @@ const BatchTransactionUpdateSchema = z.object({
   cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional().describe('Update cleared status'),
   approved: z.boolean().optional().describe('Update approval status'),
   flag_color: z.enum(['red', 'orange', 'yellow', 'green', 'blue', 'purple']).nullable().optional().describe('Update flag color. Use null to clear flag'),
-  import_id: z.string().nullable().optional().describe('Update import ID. Use null to clear import ID'),
+  import_id: z.string().max(36, 'Import ID must be 36 characters or less (YNAB API limit)').nullable().optional().describe('Update import ID. Use null to clear import ID. Max 36 characters (YNAB API limit).'),
 });
 
 /**
@@ -180,11 +180,6 @@ export class BatchUpdateTransactionsTool extends YnabTool {
                   }
                 }
               }
-            }
-
-            // Validate import_id format if provided
-            if (transactionUpdate.import_id && transactionUpdate.import_id.length > 36) {
-              throw new Error('Import ID must be 36 characters or less');
             }
 
             // Build update data
