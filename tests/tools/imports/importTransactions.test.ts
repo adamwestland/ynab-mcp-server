@@ -245,6 +245,95 @@ describe('ImportTransactionsTool', () => {
       );
     });
 
+    it('auto-approves reconciled imports (YNAB requires approved+reconciled)', async () => {
+      const mockTx = createMockTransaction({
+        id: 'tx-1',
+        import_id: 'imp-1',
+        cleared: 'reconciled',
+        approved: true,
+      });
+
+      client.createTransactions.mockResolvedValue({
+        transactions: [mockTx],
+        server_knowledge: 100,
+      });
+
+      await tool.execute({
+        budget_id: 'test-budget',
+        transactions: [{
+          account_id: 'acct-1',
+          amount: -50000,
+          date: '2024-01-15',
+          import_id: 'imp-1',
+          cleared: 'reconciled',
+        }],
+      });
+
+      expect(client.createTransactions).toHaveBeenCalledWith(
+        'test-budget',
+        expect.arrayContaining([
+          expect.objectContaining({ cleared: 'reconciled', approved: true }),
+        ])
+      );
+    });
+
+    it('honors explicit approved field when provided', async () => {
+      client.createTransactions.mockResolvedValue({
+        transactions: [createMockTransaction({ id: 'tx-1', import_id: 'imp-1', approved: true })],
+        server_knowledge: 1,
+      });
+
+      await tool.execute({
+        budget_id: 'test-budget',
+        transactions: [{
+          account_id: 'acct-1',
+          amount: -50000,
+          date: '2024-01-15',
+          import_id: 'imp-1',
+          approved: true,
+        }],
+      });
+
+      expect(client.createTransactions).toHaveBeenCalledWith(
+        'test-budget',
+        expect.arrayContaining([
+          expect.objectContaining({ approved: true }),
+        ])
+      );
+    });
+
+    it('surfaces cleared_mismatches when YNAB downgrades reconciled', async () => {
+      client.createTransactions.mockResolvedValue({
+        transactions: [
+          createMockTransaction({
+            id: 'tx-1',
+            import_id: 'imp-1',
+            cleared: 'cleared',
+            approved: true,
+          }),
+        ],
+        server_knowledge: 100,
+      });
+
+      const result = await tool.execute({
+        budget_id: 'test-budget',
+        transactions: [{
+          account_id: 'acct-1',
+          amount: -50000,
+          date: '2024-01-15',
+          import_id: 'imp-1',
+          cleared: 'reconciled',
+        }],
+      });
+
+      expect(result.cleared_mismatches).toHaveLength(1);
+      expect(result.cleared_mismatches[0]).toMatchObject({
+        import_id: 'imp-1',
+        requested: 'reconciled',
+        actual: 'cleared',
+      });
+    });
+
     it('handles API errors gracefully', async () => {
       client.createTransactions.mockRejectedValue(new Error('API error'));
 
