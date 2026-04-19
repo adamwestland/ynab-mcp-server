@@ -12,7 +12,8 @@ const TransactionImportSchema = z.object({
   memo: z.string().optional().describe('Transaction memo (optional)'),
   amount: z.number().describe('Transaction amount in milliunits (1000 = $1.00, negative for outflows)'),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('Transaction date in YYYY-MM-DD format'),
-  cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional().default('uncleared').describe('Cleared status'),
+  cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional().default('uncleared').describe('Cleared status. Note: "reconciled" requires approved=true; the tool auto-approves reconciled imports.'),
+  approved: z.boolean().optional().describe('Whether the transaction is approved. Defaults to false (YNAB import convention), but automatically set to true when cleared="reconciled" since YNAB silently downgrades unapproved+reconciled to cleared.'),
   import_id: z.string().max(36, 'Import ID must be 36 characters or less (YNAB API limit)').describe('Unique import ID to prevent duplicates - must be unique across all imports for this budget. Max 36 characters (YNAB API limit).'),
   flag_color: z.enum(['red', 'orange', 'yellow', 'green', 'blue', 'purple']).optional().describe('Flag color (optional)'),
 });
@@ -40,7 +41,7 @@ type TransactionImport = z.infer<typeof TransactionImportSchema>;
  */
 export class ImportTransactionsTool extends YnabTool {
   name = 'ynab_import_transactions';
-  description = 'Import multiple transactions with automatic deduplication. Each transaction must have a unique import_id. Supports batch import up to 100 transactions. Returns duplicate_import_ids for transactions that were not imported.';
+  description = 'Import multiple transactions with automatic deduplication. Each transaction must have a unique import_id. Supports batch import up to 100 transactions. Returns duplicate_import_ids for transactions that were not imported, and cleared_mismatches listing any transactions whose cleared status YNAB changed (e.g. reconciled downgraded to cleared). Reconciled imports are auto-approved since YNAB silently downgrades cleared=reconciled on unapproved transactions.';
   inputSchema = ImportTransactionsInputSchema;
 
   /**
@@ -83,6 +84,11 @@ export class ImportTransactionsTool extends YnabTool {
       };
     }>;
     duplicate_import_ids: string[];
+    cleared_mismatches: Array<{
+      import_id: string;
+      requested: string;
+      actual: string;
+    }>;
     server_knowledge: number;
     import_summary: {
       total_submitted: number;
@@ -103,6 +109,8 @@ export class ImportTransactionsTool extends YnabTool {
       }
 
       // Prepare transactions for import
+      // YNAB silently downgrades cleared=reconciled unless approved=true, so
+      // reconciled imports are auto-approved when approved is not specified.
       const transactionsToImport = input.transactions.map((tx: TransactionImport) => ({
         account_id: tx.account_id,
         payee_name: tx.payee_name || null,
@@ -111,7 +119,7 @@ export class ImportTransactionsTool extends YnabTool {
         amount: tx.amount,
         date: tx.date,
         cleared: tx.cleared,
-        approved: false, // Imported transactions start as unapproved
+        approved: tx.approved ?? (tx.cleared === 'reconciled'),
         flag_color: tx.flag_color || null,
         import_id: tx.import_id,
       }));
@@ -160,6 +168,24 @@ export class ImportTransactionsTool extends YnabTool {
       const importedIds = processedTransactions.map(tx => tx.import_info.id);
       const duplicateImportIds = importIds.filter(id => !importedIds.includes(id));
 
+      // Detect when YNAB returned a different cleared status than requested
+      // (most commonly "reconciled" requests downgraded to "cleared" or
+      // "uncleared" — see issue #10)
+      const requestedClearedByImportId = new Map(
+        input.transactions.map(tx => [tx.import_id, tx.cleared])
+      );
+      const clearedMismatches: Array<{ import_id: string; requested: string; actual: string }> = [];
+      for (const tx of processedTransactions) {
+        const requested = requestedClearedByImportId.get(tx.import_info.id);
+        if (requested && requested !== tx.cleared) {
+          clearedMismatches.push({
+            import_id: tx.import_info.id,
+            requested,
+            actual: tx.cleared,
+          });
+        }
+      }
+
       // Create import summary
       const importSummary = {
         total_submitted: input.transactions.length,
@@ -170,6 +196,7 @@ export class ImportTransactionsTool extends YnabTool {
       return {
         transactions: processedTransactions,
         duplicate_import_ids: duplicateImportIds,
+        cleared_mismatches: clearedMismatches,
         server_knowledge: importResponse.server_knowledge,
         import_summary: importSummary,
       };
