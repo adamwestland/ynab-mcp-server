@@ -13,7 +13,7 @@ const TransactionImportSchema = z.object({
   amount: z.number().describe('Transaction amount in milliunits (1000 = $1.00, negative for outflows)'),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('Transaction date in YYYY-MM-DD format'),
   cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional().default('uncleared').describe('Cleared status'),
-  import_id: z.string().describe('Unique import ID to prevent duplicates - must be unique across all imports for this budget'),
+  import_id: z.string().max(36, 'Import ID must be 36 characters or less (YNAB API limit)').describe('Unique import ID to prevent duplicates - must be unique across all imports for this budget. Max 36 characters (YNAB API limit).'),
   flag_color: z.enum(['red', 'orange', 'yellow', 'green', 'blue', 'purple']).optional().describe('Flag color (optional)'),
 });
 

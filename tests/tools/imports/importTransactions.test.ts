@@ -72,6 +72,38 @@ describe('ImportTransactionsTool', () => {
         ],
       })).rejects.toThrow('Duplicate import_ids found within the batch');
     });
+
+    it('rejects import_id longer than 36 characters', async () => {
+      await expect(tool.execute({
+        budget_id: 'test-budget',
+        transactions: [{
+          account_id: 'acct-1',
+          amount: -50000,
+          date: '2024-01-15',
+          import_id: 'a'.repeat(37),
+        }],
+      })).rejects.toThrow(/36 characters/);
+    });
+
+    it('accepts import_id of exactly 36 characters', async () => {
+      client.createTransactions.mockResolvedValue({
+        transactions: [createMockTransaction({
+          id: 'tx-1',
+          import_id: 'a'.repeat(36),
+        })],
+        server_knowledge: 1,
+      });
+
+      await expect(tool.execute({
+        budget_id: 'test-budget',
+        transactions: [{
+          account_id: 'acct-1',
+          amount: -50000,
+          date: '2024-01-15',
+          import_id: 'a'.repeat(36),
+        }],
+      })).resolves.toBeDefined();
+    });
   });
 
   describe('execute', () => {
