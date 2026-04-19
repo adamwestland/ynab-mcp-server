@@ -17,7 +17,7 @@ const CreateTransactionInputSchema = z.object({
   cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional().default('uncleared').describe('Cleared status of the transaction'),
   approved: z.boolean().optional().default(true).describe('Whether the transaction is approved'),
   flag_color: z.enum(['red', 'orange', 'yellow', 'green', 'blue', 'purple']).nullable().optional().describe('Flag color for the transaction'),
-  import_id: z.string().optional().describe('Optional import ID for deduplication. Must be unique within the budget'),
+  import_id: z.string().max(36, 'Import ID must be 36 characters or less (YNAB API limit)').optional().describe('Optional import ID for deduplication. Must be unique within the budget. Max 36 characters (YNAB API limit).'),
 });
 
 type CreateTransactionInput = z.infer<typeof CreateTransactionInputSchema>;
@@ -115,14 +115,6 @@ export class CreateTransactionTool extends YnabTool {
         } catch (payeeError) {
           // If payee creation fails, continue without payee
           console.warn('Failed to create payee, continuing without payee:', payeeError);
-        }
-      }
-
-      // Validate import_id format if provided
-      if (input.import_id) {
-        // YNAB import IDs should be unique strings, often in YNAB:amount:payee:date format
-        if (input.import_id.length > 36) {
-          throw new Error('Import ID must be 36 characters or less');
         }
       }
 
