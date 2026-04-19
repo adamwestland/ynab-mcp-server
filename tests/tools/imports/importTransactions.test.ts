@@ -334,6 +334,37 @@ describe('ImportTransactionsTool', () => {
       );
     });
 
+    it('lets explicit approved=false override the reconciled auto-approve', async () => {
+      client.createTransactions.mockResolvedValue({
+        transactions: [createMockTransaction({
+          id: 'tx-1',
+          import_id: 'imp-1',
+          cleared: 'reconciled',
+          approved: false,
+        })],
+        server_knowledge: 1,
+      });
+
+      await tool.execute({
+        budget_id: 'test-budget',
+        transactions: [{
+          account_id: 'acct-1',
+          amount: -50000,
+          date: '2024-01-15',
+          import_id: 'imp-1',
+          cleared: 'reconciled',
+          approved: false,
+        }],
+      });
+
+      expect(client.createTransactions).toHaveBeenCalledWith(
+        'test-budget',
+        expect.arrayContaining([
+          expect.objectContaining({ cleared: 'reconciled', approved: false }),
+        ])
+      );
+    });
+
     it('surfaces cleared_mismatches when YNAB downgrades reconciled', async () => {
       client.createTransactions.mockResolvedValue({
         transactions: [
