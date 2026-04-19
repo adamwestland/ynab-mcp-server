@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Run tests
+        run: set -o pipefail; npx vitest run --reporter=verbose --reporter=github-actions 2>&1 | tee test-output.txt
+
+      - name: Post test summary
+        if: always()
+        run: |
+          {
+            echo '### Unit Test Results'
+            echo '```'
+            tail -40 test-output.txt
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
