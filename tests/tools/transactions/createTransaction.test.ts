@@ -170,6 +170,21 @@ describe('CreateTransactionTool', () => {
       })).rejects.toThrow('Import ID must be 36 characters or less');
     });
 
+    it.each([
+      'Reconciliation Balance Adjustment',
+      'Manual Balance Adjustment',
+      'Starting Balance',
+      'reconciliation balance adjustment', // case-insensitive
+    ])('rejects reserved payee name "%s" with a clear error', async (name) => {
+      await expect(tool.execute({
+        budget_id: 'test-budget',
+        account_id: 'test-account',
+        amount: -10000,
+        date: '2024-01-15',
+        payee_name: name,
+      })).rejects.toThrow(/reserved by YNAB/i);
+    });
+
     it('includes import_id in transaction', async () => {
       const mockTx = createMockTransaction({
         id: 'tx-1',

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { YnabTool } from '../base.js';
+import { assertPayeeNameAllowed } from '../common/reservedPayees.js';
 import type { YnabTransactionsResponse, YnabPayeesResponse, UpdateTransactionWithId } from '../../types/index.js';
 
 /**
@@ -86,6 +87,7 @@ export class UpdateTransactionTool extends YnabTool {
     changes_made: string[];
   }> {
     const input = this.validateArgs<UpdateTransactionInput>(args);
+    assertPayeeNameAllowed(input.payee_name);
 
     try {
       let payeeId = input.payee_id;

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { YnabTool } from '../base.js';
+import { assertPayeeNameAllowed } from '../common/reservedPayees.js';
 import type { YnabTransactionResponse, UpdateTransaction } from '../../types/index.js';
 
 /**
@@ -70,6 +71,7 @@ export class UnlinkTransferTool extends YnabTool {
     server_knowledge: number;
   }> {
     const input = this.validateArgs<UnlinkTransferInput>(args);
+    assertPayeeNameAllowed(input.new_payee_name);
 
     try {
       // First, get the current transaction to understand the transfer relationship

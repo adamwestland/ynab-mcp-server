@@ -73,6 +73,22 @@ describe('ImportTransactionsTool', () => {
       })).rejects.toThrow('Duplicate import_ids found within the batch');
     });
 
+    it('rejects reserved payee_name on any imported transaction (issue #11)', async () => {
+      await expect(tool.execute({
+        budget_id: 'test-budget',
+        transactions: [
+          {
+            account_id: 'acct-1',
+            amount: -50000,
+            date: '2024-01-15',
+            import_id: 'imp-1',
+            payee_name: 'Reconciliation Balance Adjustment',
+          },
+        ],
+      })).rejects.toThrow(/reserved by YNAB/i);
+      expect(client.createTransactions).not.toHaveBeenCalled();
+    });
+
     it('rejects import_id longer than 36 characters', async () => {
       await expect(tool.execute({
         budget_id: 'test-budget',

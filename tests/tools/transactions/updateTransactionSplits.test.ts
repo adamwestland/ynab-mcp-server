@@ -272,4 +272,28 @@ describe('UpdateTransactionSplitsTool', () => {
       })).rejects.toThrow(/category_id is required/);
     });
   });
+
+  describe('reserved payee validation', () => {
+    it('rejects reserved parent payee_name before hitting the API', async () => {
+      await expect(tool.execute({
+        budget_id: 'b1',
+        transaction_id: 'split-1',
+        payee_name: 'Reconciliation Balance Adjustment',
+        subtransactions: [
+          { amount: -10000, category_id: 'cat-1' },
+        ],
+      })).rejects.toThrow(/reserved by YNAB/i);
+      expect(client.updateTransaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects reserved subtransaction payee_name', async () => {
+      await expect(tool.execute({
+        budget_id: 'b1',
+        transaction_id: 'split-1',
+        subtransactions: [
+          { amount: -10000, category_id: 'cat-1', payee_name: 'Manual Balance Adjustment' },
+        ],
+      })).rejects.toThrow(/reserved by YNAB/i);
+    });
+  });
 });
