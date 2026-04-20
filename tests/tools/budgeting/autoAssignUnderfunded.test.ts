@@ -133,6 +133,18 @@ describe('AutoAssignUnderfundedTool', () => {
     expect(client.updateCategoryBudget).toHaveBeenCalledWith('b1', 'c-2', '2024-01-01', 20000);
   });
 
+  it('wraps errors exactly once (no "failed: failed:" double-wrap)', async () => {
+    client.getBudgetMonth.mockRejectedValue(new Error('boom'));
+    try {
+      await tool.execute({ budget_id: 'b1', month: '2024-01-01', skip_closed_cc_categories: false });
+      expect.fail('expected error');
+    } catch (e) {
+      const msg = (e as Error).message;
+      const occurrences = (msg.match(/auto-assign underfunded failed/g) ?? []).length;
+      expect(occurrences).toBe(1);
+    }
+  });
+
   it('surfaces per-category failures without aborting the batch', async () => {
     const c1 = createMockCategory({ id: 'c-1', name: 'One', category_group_name: 'G', budgeted: 0, activity: -10000, balance: -10000 });
     const c2 = createMockCategory({ id: 'c-2', name: 'Two', category_group_name: 'G', budgeted: 0, activity: -20000, balance: -20000 });

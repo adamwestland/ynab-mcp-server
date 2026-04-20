@@ -95,4 +95,16 @@ describe('AutoSweepPositivesTool', () => {
     expect(result.dry_run).toBe(true);
     expect(result.details[0]!.status).toBe('planned');
   });
+
+  it('wraps errors exactly once (no "failed: failed:" double-wrap)', async () => {
+    client.getBudgetMonth.mockRejectedValue(new Error('boom'));
+    try {
+      await tool.execute({ budget_id: 'b1', month: '2024-01-01', skip_closed_cc_categories: false });
+      expect.fail('expected error');
+    } catch (e) {
+      const msg = (e as Error).message;
+      const occurrences = (msg.match(/auto-sweep positives failed/g) ?? []).length;
+      expect(occurrences).toBe(1);
+    }
+  });
 });
