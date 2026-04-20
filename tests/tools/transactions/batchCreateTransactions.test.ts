@@ -163,5 +163,108 @@ describe('BatchCreateTransactionsTool', () => {
       })).rejects.toThrow(/batch create transactions failed/i);
       expect(client.createTransactions).toHaveBeenCalledTimes(1);
     });
+
+    it('does NOT trigger per-row fallback on 401 auth errors', async () => {
+      client.createTransactions.mockRejectedValue(
+        new YNABError({ type: 'auth', message: 'Unauthorized', statusCode: 401 })
+      );
+      await expect(tool.execute({
+        budget_id: 'b1',
+        transactions: [
+          { account_id: 'a1', amount: -1000, date: '2024-01-01' },
+          { account_id: 'a1', amount: -2000, date: '2024-01-02' },
+        ],
+      })).rejects.toThrow(/batch create transactions failed/i);
+      // only the single bulk attempt; no 2 per-row retries
+      expect(client.createTransactions).toHaveBeenCalledTimes(1);
+    });
+
+    it('rethrows when a rate-limit occurs mid-fallback (stop hammering)', async () => {
+      let calls = 0;
+      client.createTransactions.mockImplementation(async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw new YNABError({ type: 'validation', message: 'Bad request', statusCode: 400 });
+        }
+        if (calls === 3) {
+          throw new YNABError({ type: 'rate_limit', message: '429', statusCode: 429 });
+        }
+        return {
+          transactions: [createMockTransaction({ id: `tx-${calls}` })],
+          server_knowledge: 1,
+        };
+      });
+
+      await expect(tool.execute({
+        budget_id: 'b1',
+        transactions: [
+          { account_id: 'a1', amount: -1000, date: '2024-01-01' },
+          { account_id: 'a1', amount: -2000, date: '2024-01-02' },
+          { account_id: 'a1', amount: -3000, date: '2024-01-03' },
+        ],
+      })).rejects.toThrow(/batch create transactions failed/i);
+      // bulk + row 1 success + row 2 rate-limited (stop here, don't continue)
+      expect(client.createTransactions).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('index correlation', () => {
+    it('correlates bulk happy-path rows back to submission order via import_id', async () => {
+      // YNAB returns rows in reversed order — check we still map them correctly.
+      client.createTransactions.mockResolvedValue({
+        transactions: [
+          createMockTransaction({ id: 'tx-2', import_id: 'bulk-2' }),
+          createMockTransaction({ id: 'tx-1', import_id: 'bulk-1' }),
+        ],
+        server_knowledge: 1,
+      });
+
+      const result = await tool.execute({
+        budget_id: 'b1',
+        transactions: [
+          { account_id: 'a1', amount: -1000, date: '2024-01-01', import_id: 'bulk-1' },
+          { account_id: 'a1', amount: -2000, date: '2024-01-02', import_id: 'bulk-2' },
+        ],
+      });
+
+      const byId = Object.fromEntries(result.created.map(r => [r.id, r.index]));
+      expect(byId['tx-1']).toBe(0);
+      expect(byId['tx-2']).toBe(1);
+    });
+
+    it('leaves index=null for bulk rows without import_id (response order is not guaranteed)', async () => {
+      client.createTransactions.mockResolvedValue({
+        transactions: [createMockTransaction({ id: 'tx-a' })],
+        server_knowledge: 1,
+      });
+      const result = await tool.execute({
+        budget_id: 'b1',
+        transactions: [{ account_id: 'a1', amount: -1000, date: '2024-01-01' }],
+      });
+      expect(result.created[0]!.index).toBeNull();
+    });
+  });
+
+  describe('server_knowledge nullability', () => {
+    it('returns null server_knowledge when every fallback row fails', async () => {
+      let calls = 0;
+      client.createTransactions.mockImplementation(async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw new YNABError({ type: 'validation', message: 'Bad request', statusCode: 400 });
+        }
+        throw new YNABError({ type: 'validation', message: 'row bad', statusCode: 400 });
+      });
+
+      const result = await tool.execute({
+        budget_id: 'b1',
+        transactions: [
+          { account_id: 'a1', amount: -1000, date: '2024-01-01' },
+          { account_id: 'a1', amount: -2000, date: '2024-01-02' },
+        ],
+      });
+      expect(result.server_knowledge).toBeNull();
+      expect(result.failed).toHaveLength(2);
+    });
   });
 });

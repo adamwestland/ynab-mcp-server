@@ -4,22 +4,20 @@ import { assertPayeeNameAllowed } from '../common/reservedPayees.js';
 import { YNABError } from '../../client/ErrorHandler.js';
 import type { SaveTransaction, YnabTransaction, YnabTransactionsResponse } from '../../types/index.js';
 
-/** Input shape for one transaction in a batch create. Mirrors
- * CreateTransactionTool's schema but makes `import_id` optional and
- * defaults `approved` to true (deliberate user-initiated creates, not
- * feed imports). */
+// One transaction in a batch-create payload. Mirrors create_transaction but
+// makes import_id optional and defaults approved=true (user-initiated).
 const BatchCreateTransactionInputSchema = z.object({
   account_id: z.string().describe('The account ID where the transaction will be created'),
   category_id: z.string().nullable().optional().describe('The category ID for the transaction. Use null for transfers or income'),
   payee_id: z.string().nullable().optional().describe('The payee ID for the transaction'),
-  payee_name: z.string().optional().describe('The payee name. Tool does NOT auto-create payees in batch mode to avoid extra API calls; set payee_id or an exact existing name'),
+  payee_name: z.string().optional().describe('The payee name. Tool does NOT auto-create payees in batch mode; set payee_id or an exact existing name'),
   amount: z.number().int().describe('Transaction amount in milliunits. Negative for outflows, positive for inflows'),
   memo: z.string().optional().describe('Optional memo/description for the transaction'),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('Transaction date in YYYY-MM-DD format'),
-  cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional().default('uncleared').describe('Cleared status. Unlike import_transactions, this tool defaults approved=true so reconciled is preserved without special handling'),
+  cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional().default('uncleared').describe('Cleared status. This tool defaults approved=true so reconciled is preserved without special handling'),
   approved: z.boolean().optional().default(true).describe('Whether the transaction is approved. Default true'),
   flag_color: z.enum(['red', 'orange', 'yellow', 'green', 'blue', 'purple']).nullable().optional().describe('Flag color for the transaction'),
-  import_id: z.string().max(36, 'Import ID must be 36 characters or less (YNAB API limit)').optional().describe('Optional deduplication key. Max 36 characters'),
+  import_id: z.string().max(36, 'Import ID must be 36 characters or less (YNAB API limit)').optional().describe('Optional deduplication key. Max 36 characters. Supplying one also lets the response correlate created rows back to submission order'),
 });
 
 type BatchCreateTransactionInput = z.infer<typeof BatchCreateTransactionInputSchema>;
@@ -33,7 +31,8 @@ type BatchCreateInput = z.infer<typeof BatchCreateInputSchema>;
 
 interface CreatedTransactionSummary {
   id: string;
-  index: number;
+  // Submission index when correlate-able (import_id present or per-row fallback), else null. In bulk mode without import_ids YNAB does not guarantee response order matches submission order.
+  index: number | null;
   date: string;
   amount: { milliunits: number; formatted: string };
   account_id: string;
@@ -53,7 +52,8 @@ export interface BatchCreateResult {
   created: CreatedTransactionSummary[];
   failed: FailedTransaction[];
   duplicate_import_ids: string[];
-  server_knowledge: number;
+  // null when no successful API call was made (e.g. every fallback row failed). Avoids callers confusing 0 with "no prior knowledge" for delta sync.
+  server_knowledge: number | null;
   summary: {
     total_submitted: number;
     created: number;
@@ -84,7 +84,7 @@ function formatCurrency(milliunits: number): string {
   return dollars < 0 ? `-$${Math.abs(dollars).toFixed(2)}` : `$${dollars.toFixed(2)}`;
 }
 
-function summarize(tx: YnabTransaction, index: number): CreatedTransactionSummary {
+function summarize(tx: YnabTransaction, index: number | null): CreatedTransactionSummary {
   return {
     id: tx.id,
     index,
@@ -98,20 +98,17 @@ function summarize(tx: YnabTransaction, index: number): CreatedTransactionSummar
   };
 }
 
-function isClientError(err: unknown): boolean {
+// Only YNAB 400 and 409 (conflict) hint at "a specific row is bad." Auth
+// (401/403), rate-limit (429), 5xx, and network errors are system-level
+// problems where per-row fallback would just amplify the damage.
+function shouldFallbackOn(err: unknown): boolean {
   if (!(err instanceof YNABError)) return false;
-  return err.statusCode !== undefined && err.statusCode >= 400 && err.statusCode < 500;
+  return err.statusCode === 400 || err.statusCode === 409;
 }
 
-/** Create many transactions in one call. Attempts a single bulk POST for
- * the happy path; on a YNAB 4xx response (which by design aborts the whole
- * batch and hides which row was at fault), falls back to per-row POSTs so
- * the caller gets index-aligned success/failure detail. Non-4xx failures
- * (rate-limit, 5xx, network) surface as a tool-level error rather than
- * amplifying into per-row retries. */
 export class BatchCreateTransactionsTool extends YnabTool {
   name = 'ynab_batch_create_transactions';
-  description = 'Create up to 100 transactions in a single batch. Tries one bulk POST; on YNAB validation (4xx) failures, falls back to per-transaction POSTs and reports which rows succeeded and which failed. Preserves cleared=reconciled with approved=true defaults. Amounts in milliunits.';
+  description = 'Create up to 100 transactions in a single batch. Tries one bulk POST; on a YNAB 400/409 (which by design aborts the whole batch and hides which row was at fault), automatically falls back to per-transaction POSTs and reports which rows succeeded and which failed. Preserves cleared=reconciled with approved=true defaults. Amounts in milliunits.';
   inputSchema = BatchCreateInputSchema;
 
   async execute(args: unknown): Promise<BatchCreateResult> {
@@ -121,11 +118,15 @@ export class BatchCreateTransactionsTool extends YnabTool {
     }
 
     try {
-      return await this.bulkCreate(input);
-    } catch (error) {
-      if (isClientError(error) && input.transactions.length > 1) {
+      try {
+        return await this.bulkCreate(input);
+      } catch (bulkError) {
+        if (!shouldFallbackOn(bulkError) || input.transactions.length <= 1) {
+          throw bulkError;
+        }
         return await this.fallbackPerTransaction(input);
       }
+    } catch (error) {
       this.handleError(error, 'batch create transactions');
     }
   }
@@ -134,7 +135,18 @@ export class BatchCreateTransactionsTool extends YnabTool {
     const payload = input.transactions.map(toSaveTransaction);
     const response: YnabTransactionsResponse = await this.client.createTransactions(input.budget_id, payload);
 
-    const created = response.transactions.map((tx, i) => summarize(tx, i));
+    // Correlate created rows back to submission order via import_id when
+    // supplied. Without it, YNAB response order is not guaranteed to match
+    // submission order, so we record index=null for those rows.
+    const submissionIndexByImportId = new Map<string, number>();
+    input.transactions.forEach((t, i) => {
+      if (t.import_id) submissionIndexByImportId.set(t.import_id, i);
+    });
+    const created = response.transactions.map(tx => {
+      const index = tx.import_id ? submissionIndexByImportId.get(tx.import_id) ?? null : null;
+      return summarize(tx, index);
+    });
+
     const returnedImportIds = new Set(response.transactions.map(t => t.import_id).filter((v): v is string => !!v));
     const submittedImportIds = input.transactions.map(t => t.import_id).filter((v): v is string => !!v);
     const duplicateImportIds = submittedImportIds.filter(id => !returnedImportIds.has(id));
@@ -158,7 +170,7 @@ export class BatchCreateTransactionsTool extends YnabTool {
     const created: CreatedTransactionSummary[] = [];
     const failed: FailedTransaction[] = [];
     const duplicateImportIds: string[] = [];
-    let serverKnowledge = 0;
+    let serverKnowledge: number | null = null;
 
     for (let index = 0; index < input.transactions.length; index += 1) {
       const row = input.transactions[index]!;
@@ -178,6 +190,10 @@ export class BatchCreateTransactionsTool extends YnabTool {
         created.push(summarize(resp.transactions[0]!, index));
         serverKnowledge = resp.server_knowledge;
       } catch (error) {
+        // Only client-level 400/409 belong per-row; re-raise anything else
+        // (rate-limit, 5xx, network) instead of silently marking 100 rows
+        // as failed while the server is down.
+        if (!shouldFallbackOn(error)) throw error;
         const message = error instanceof Error ? error.message : String(error);
         failed.push({
           index,
