@@ -74,3 +74,5 @@ pids
 
 # Vitest
 coverage
+# Claude Code local state
+.claude/
