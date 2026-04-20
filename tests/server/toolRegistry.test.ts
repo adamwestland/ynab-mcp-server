@@ -178,6 +178,13 @@ describe('Tool Registry', () => {
     });
   });
 
+  describe('Batch create', () => {
+    it('registers batch_create_transactions tool', () => {
+      const tool = registeredTools.find(t => t.name === 'ynab_batch_create_transactions');
+      expect(tool).toBeDefined();
+    });
+  });
+
   describe('Budgeting tools', () => {
     it.each([
       'ynab_auto_assign_underfunded',
