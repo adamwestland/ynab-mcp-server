@@ -102,7 +102,16 @@ export function formatMilliunits(milliunits: number): string {
     : `$${dollars.toFixed(2)}`;
 }
 
-export function wrapAmount(milliunits: number | null): { milliunits: number; formatted: string } | null {
+export interface FormattedAmount {
+  milliunits: number;
+  formatted: string;
+}
+
+export function wrapAmount(milliunits: number | null): FormattedAmount | null {
   if (milliunits === null) return null;
+  return { milliunits, formatted: formatMilliunits(milliunits) };
+}
+
+export function formatAmount(milliunits: number): FormattedAmount {
   return { milliunits, formatted: formatMilliunits(milliunits) };
 }

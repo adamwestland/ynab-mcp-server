@@ -7,6 +7,7 @@ import {
   loadBudgetingContext,
   refreshToBeBudgeted,
   wrapAmount,
+  formatAmount,
   type BaseBudgetingInput,
   type BudgetingResult,
 } from './shared.js';
@@ -57,7 +58,7 @@ export class ResetAvailableAmountsTool extends YnabTool {
         dry_run: input.dry_run,
         categories_touched: result.applied,
         total_moved_milliunits: result.total_moved_milliunits,
-        to_be_budgeted_before: { milliunits: ctx.toBeBudgetedBefore, formatted: this.formatCurrency(ctx.toBeBudgetedBefore) },
+        to_be_budgeted_before: formatAmount(ctx.toBeBudgetedBefore),
         to_be_budgeted_after: wrapAmount(toBeBudgetedAfter),
         skipped,
         details: result.details,

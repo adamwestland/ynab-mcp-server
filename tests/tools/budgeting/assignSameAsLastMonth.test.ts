@@ -61,7 +61,7 @@ describe('AssignSameAsLastMonthTool', () => {
 
     expect(client.updateCategoryBudget).toHaveBeenCalledTimes(1);
     expect(client.updateCategoryBudget).toHaveBeenCalledWith('b1', 'c-food', '2024-02-01', 60000);
-    expect(r.skipped.some(s => s.category_id === 'c-new' && s.reason === 'excluded')).toBe(true);
+    expect(r.skipped.some(s => s.category_id === 'c-new' && s.reason === 'no_prior_month')).toBe(true);
   });
 
   it('no-ops categories already matching previous month', async () => {

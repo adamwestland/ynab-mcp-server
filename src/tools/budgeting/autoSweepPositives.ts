@@ -7,7 +7,9 @@ import {
   loadBudgetingContext,
   refreshToBeBudgeted,
   wrapAmount,
+  formatAmount,
   type BaseBudgetingInput,
+  type BudgetingContext,
   type BudgetingResult,
 } from './shared.js';
 
@@ -24,9 +26,17 @@ export class AutoSweepPositivesTool extends YnabTool {
 
   async execute(args: unknown): Promise<BudgetingResult> {
     const input = this.validateArgs<BaseBudgetingInput>(args);
-
     try {
       const ctx = await loadBudgetingContext(this.client, input);
+      return await this.executeWithContext(input, ctx);
+    } catch (error) {
+      this.handleError(error, 'auto-sweep positives');
+    }
+  }
+
+  /** Execute against a caller-supplied context; used by AutoBalanceMonth. */
+  async executeWithContext(input: BaseBudgetingInput, ctx: BudgetingContext): Promise<BudgetingResult> {
+    try {
       const filterOpts = buildFilterOptions(input, ctx.closedCcAccountNames, { skip_goal_carryover: true });
       const { kept, skipped } = filterCategories(ctx.categories, filterOpts);
 
@@ -60,7 +70,7 @@ export class AutoSweepPositivesTool extends YnabTool {
         dry_run: input.dry_run,
         categories_touched: result.applied,
         total_moved_milliunits: result.total_moved_milliunits,
-        to_be_budgeted_before: { milliunits: ctx.toBeBudgetedBefore, formatted: this.formatCurrency(ctx.toBeBudgetedBefore) },
+        to_be_budgeted_before: formatAmount(ctx.toBeBudgetedBefore),
         to_be_budgeted_after: wrapAmount(toBeBudgetedAfter),
         skipped,
         details: result.details,

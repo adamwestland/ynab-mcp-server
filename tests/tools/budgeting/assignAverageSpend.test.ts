@@ -94,7 +94,7 @@ describe('AssignAverageSpendTool', () => {
     expect(r.lookback_used).toBe(1);
   });
 
-  it('skips category with zero history', async () => {
+  it('skips category with zero history and surfaces it in skipped with reason=no_history', async () => {
     const catId = 'c-food';
     const foodIn = (activity: number) => createMockCategory({
       id: catId, name: 'Food', category_group_name: 'Spending', budgeted: 10000, activity, balance: 0,
@@ -104,7 +104,7 @@ describe('AssignAverageSpendTool', () => {
       return monthResponse(m, []);
     });
 
-    await tool.execute({
+    const r = await tool.execute({
       budget_id: 'b1',
       month: '2024-04-01',
       lookback_months: 3,
@@ -112,5 +112,6 @@ describe('AssignAverageSpendTool', () => {
     });
 
     expect(client.updateCategoryBudget).not.toHaveBeenCalled();
+    expect(r.skipped.some(s => s.category_id === catId && s.reason === 'no_history')).toBe(true);
   });
 });

@@ -9,6 +9,7 @@ import {
   loadBudgetingContext,
   refreshToBeBudgeted,
   wrapAmount,
+  formatAmount,
   type BudgetingResult,
 } from './shared.js';
 
@@ -62,7 +63,10 @@ export class AssignAverageSpendTool extends YnabTool {
           if (activity >= 0) continue; // ignore refunds/income-into-category
           outflows.push(Math.abs(activity));
         }
-        if (outflows.length === 0) continue;
+        if (outflows.length === 0) {
+          skipped.push({ category_id: cur.id, category_name: cur.name, reason: 'no_history' });
+          continue;
+        }
         maxLookbackObserved = Math.max(maxLookbackObserved, outflows.length);
         const avg = Math.round(outflows.reduce((s, v) => s + v, 0) / outflows.length);
         if (avg === cur.budgeted) continue;
@@ -95,7 +99,7 @@ export class AssignAverageSpendTool extends YnabTool {
         dry_run: input.dry_run,
         categories_touched: result.applied,
         total_moved_milliunits: result.total_moved_milliunits,
-        to_be_budgeted_before: { milliunits: ctx.toBeBudgetedBefore, formatted: this.formatCurrency(ctx.toBeBudgetedBefore) },
+        to_be_budgeted_before: formatAmount(ctx.toBeBudgetedBefore),
         to_be_budgeted_after: wrapAmount(toBeBudgetedAfter),
         skipped,
         details: result.details,

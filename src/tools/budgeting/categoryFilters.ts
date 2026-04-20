@@ -51,7 +51,11 @@ export interface FilteredCategory {
     | 'deleted'
     | 'ready_to_assign'
     | 'closed_cc'
-    | 'goal_carryover';
+    | 'goal_carryover'
+    /** Tool-specific: category did not exist in the month being copied from (assign-same-as-last-month). */
+    | 'no_prior_month'
+    /** Tool-specific: no outflow in the lookback window (assign-average-spend). */
+    | 'no_history';
 }
 
 /** YNAB's balance equation for a given month: balance = prior_carryover + budgeted + activity.

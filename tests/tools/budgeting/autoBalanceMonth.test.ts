@@ -43,6 +43,22 @@ describe('AutoBalanceMonthTool', () => {
     expect(result.total_moved_milliunits).toBe(50000); // 10k sweep + 40k assign
   });
 
+  it('loads accounts once across both phases (rate-limit conservation)', async () => {
+    const refund = createMockCategory({
+      id: 'c-refund', name: 'Amazon', category_group_name: 'Shopping',
+      budgeted: 0, activity: 10000, balance: 10000,
+    });
+    const underfunded = createMockCategory({
+      id: 'c-under', name: 'Groceries', category_group_name: 'Spending',
+      budgeted: 0, activity: -40000, balance: -40000,
+    });
+    client.getBudgetMonth.mockResolvedValue(monthResponse([refund, underfunded]));
+
+    await tool.execute({ budget_id: 'b1', month: '2024-01-01' });
+
+    expect(client.getAccounts).toHaveBeenCalledTimes(1);
+  });
+
   it('dry_run bubbles through to both phases', async () => {
     const refund = createMockCategory({
       id: 'c-refund', name: 'Amazon', category_group_name: 'Shopping',

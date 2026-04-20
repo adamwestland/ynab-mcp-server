@@ -8,6 +8,7 @@ import {
   loadBudgetingContext,
   refreshToBeBudgeted,
   wrapAmount,
+  formatAmount,
   type BaseBudgetingInput,
   type BudgetingResult,
 } from './shared.js';
@@ -36,8 +37,7 @@ export class AssignSameAsLastMonthTool extends YnabTool {
       for (const cur of kept) {
         const prev = prevById.get(cur.id);
         if (!prev) {
-          // Treat "new this month" as excluded so the caller can see why it wasn't touched.
-          skipped.push({ category_id: cur.id, category_name: cur.name, reason: 'excluded' });
+          skipped.push({ category_id: cur.id, category_name: cur.name, reason: 'no_prior_month' });
           continue;
         }
         changes.push({
@@ -69,7 +69,7 @@ export class AssignSameAsLastMonthTool extends YnabTool {
         dry_run: input.dry_run,
         categories_touched: result.applied,
         total_moved_milliunits: result.total_moved_milliunits,
-        to_be_budgeted_before: { milliunits: ctx.toBeBudgetedBefore, formatted: this.formatCurrency(ctx.toBeBudgetedBefore) },
+        to_be_budgeted_before: formatAmount(ctx.toBeBudgetedBefore),
         to_be_budgeted_after: wrapAmount(toBeBudgetedAfter),
         skipped,
         details: result.details,
