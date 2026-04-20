@@ -4,8 +4,9 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { CreateTransactionTool } from '../../../src/tools/transactions/createTransaction.js';
+import { YNABError } from '../../../src/client/ErrorHandler.js';
 import { createMockClient, type MockYNABClient } from '../../helpers/mockClient.js';
-import { createMockTransaction, createMockPayee } from '../../helpers/fixtures.js';
+import { createMockTransaction, createMockPayee, createMockAccount, createMockCategory } from '../../helpers/fixtures.js';
 
 describe('CreateTransactionTool', () => {
   let client: MockYNABClient;
@@ -269,6 +270,44 @@ describe('CreateTransactionTool', () => {
         amount: -50000,
         date: '2024-01-15',
       })).rejects.toThrow('No transaction returned');
+    });
+
+    it('enriches 400 with a CC+RTA hint (issue #12)', async () => {
+      client.createTransactions.mockRejectedValue(
+        new YNABError({ type: 'validation', message: 'Bad request', statusCode: 400 })
+      );
+      client.getAccount.mockResolvedValue(createMockAccount({ id: 'cc-1', type: 'creditCard', closed: false }));
+      client.getCategory.mockResolvedValue({
+        category: createMockCategory({ id: 'cat-rta', name: 'Inflow: Ready to Assign', category_group_name: 'Internal Master Category' }),
+        server_knowledge: 1,
+      });
+
+      await expect(tool.execute({
+        budget_id: 'b1',
+        account_id: 'cc-1',
+        category_id: 'cat-rta',
+        amount: 10000,
+        date: '2024-01-01',
+      })).rejects.toThrow(/Inflow: Ready to Assign.*credit card/i);
+    });
+
+    it('does not enrich when account is not debt-like (#12 safety)', async () => {
+      client.createTransactions.mockRejectedValue(
+        new YNABError({ type: 'validation', message: 'Bad request', statusCode: 400 })
+      );
+      client.getAccount.mockResolvedValue(createMockAccount({ id: 'chk-1', type: 'checking', closed: false }));
+      client.getCategory.mockResolvedValue({
+        category: createMockCategory({ id: 'cat-rta', name: 'Inflow: Ready to Assign', category_group_name: 'Internal Master Category' }),
+        server_knowledge: 1,
+      });
+
+      await expect(tool.execute({
+        budget_id: 'b1',
+        account_id: 'chk-1',
+        category_id: 'cat-rta',
+        amount: 10000,
+        date: '2024-01-01',
+      })).rejects.toThrow(/Bad request/);
     });
   });
 });
