@@ -254,20 +254,31 @@ export class CreateSplitTransactionTool extends YnabTool {
         subtransactions: processedSubtransactions,
       };
 
-      // Check the first non-null subtransaction category for RTA-on-CC
-      // enrichment (#12). Splits have no parent category_id.
-      const firstCategoryId = processedSubtransactions.find(s => s.category_id)?.category_id ?? null;
+      // Create. On a YNAB 400, probe EVERY non-null subtransaction category
+      // for RTA-on-CC enrichment (#12) — the offending subtxn could be at
+      // any position. Splits have no parent category_id.
       let response: YnabTransactionsResponse;
       try {
         response = await this.client.createTransactions(input.budget_id, [transactionData]);
       } catch (createError) {
-        throw await maybeEnrichCcInflowError(
-          this.client,
-          createError,
-          input.budget_id,
-          input.account_id,
-          firstCategoryId
-        );
+        const subCategoryIds = processedSubtransactions
+          .map(s => s.category_id)
+          .filter((v): v is string => !!v);
+        let enriched: Error = createError instanceof Error ? createError : new Error(String(createError));
+        for (const categoryId of subCategoryIds) {
+          const candidate = await maybeEnrichCcInflowError(
+            this.client,
+            createError,
+            input.budget_id,
+            input.account_id,
+            categoryId
+          );
+          if (candidate !== createError) {
+            enriched = candidate;
+            break;
+          }
+        }
+        throw enriched;
       }
 
       if (!response.transactions || response.transactions.length === 0) {

@@ -57,4 +57,17 @@ describe('UpdateTransactionTool', () => {
       category_id: 'cat-rta',
     })).rejects.toThrow(/Inflow: Ready to Assign.*credit card/i);
   });
+
+  it('preserves the original 400 when the account_id lookup itself fails (#12 safety)', async () => {
+    client.updateTransactions.mockRejectedValue(
+      new YNABError({ type: 'validation', message: 'Bad request', statusCode: 400 })
+    );
+    client.getTransaction.mockRejectedValue(new Error('transaction not found'));
+
+    await expect(tool.execute({
+      budget_id: 'b1',
+      transaction_id: 'tx-missing',
+      category_id: 'cat-rta',
+    })).rejects.toThrow(/Bad request/);
+  });
 });

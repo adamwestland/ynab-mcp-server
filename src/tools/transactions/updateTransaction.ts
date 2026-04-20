@@ -201,8 +201,17 @@ export class UpdateTransactionTool extends YnabTool {
         response = await this.client.updateTransactions(input.budget_id, [updateData]);
       } catch (updateError) {
         if (input.category_id) {
-          const accountId =
-            input.account_id ?? (await this.client.getTransaction(input.budget_id, input.transaction_id))?.account_id;
+          // Resolve account_id lazily when the caller didn't supply one.
+          // Wrap in its own try/catch so a failing lookup doesn't replace
+          // the original 400 with a misleading "get transaction failed".
+          let accountId: string | undefined = input.account_id;
+          if (!accountId) {
+            try {
+              accountId = (await this.client.getTransaction(input.budget_id, input.transaction_id))?.account_id;
+            } catch {
+              accountId = undefined;
+            }
+          }
           if (accountId) {
             throw await maybeEnrichCcInflowError(
               this.client,
