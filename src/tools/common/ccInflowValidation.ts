@@ -28,10 +28,8 @@ const DEBT_LIKE_ACCOUNT_TYPES = new Set<string>([
 const INTERNAL_MASTER_CATEGORY_GROUP = 'Internal Master Category';
 
 function isBadRequest(err: unknown): boolean {
-  return (
-    err instanceof YNABError &&
-    (err.type === 'validation' || err.statusCode === 400)
-  );
+  // ErrorHandler maps HTTP 400 to type 'validation', so the type check is sufficient.
+  return err instanceof YNABError && err.type === 'validation';
 }
 
 /** Inspect a failed create/update call and, if the underlying cause is the

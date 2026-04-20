@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { YnabTool } from '../base.js';
 import { assertPayeeNameAllowed } from '../common/reservedPayees.js';
+import { maybeEnrichCcInflowError } from '../common/ccInflowValidation.js';
 import type { YnabTransactionsResponse, YnabPayeesResponse, SaveTransaction } from '../../types/index.js';
 
 /**
@@ -253,11 +254,21 @@ export class CreateSplitTransactionTool extends YnabTool {
         subtransactions: processedSubtransactions,
       };
 
-      // Create the split transaction
-      const response: YnabTransactionsResponse = await this.client.createTransactions(
-        input.budget_id,
-        [transactionData]
-      );
+      // Check the first non-null subtransaction category for RTA-on-CC
+      // enrichment (#12). Splits have no parent category_id.
+      const firstCategoryId = processedSubtransactions.find(s => s.category_id)?.category_id ?? null;
+      let response: YnabTransactionsResponse;
+      try {
+        response = await this.client.createTransactions(input.budget_id, [transactionData]);
+      } catch (createError) {
+        throw await maybeEnrichCcInflowError(
+          this.client,
+          createError,
+          input.budget_id,
+          input.account_id,
+          firstCategoryId
+        );
+      }
 
       if (!response.transactions || response.transactions.length === 0) {
         throw new Error('No transaction returned from YNAB API');

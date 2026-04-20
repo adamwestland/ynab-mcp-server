@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { YnabTool } from '../base.js';
 import { assertPayeeNameAllowed } from '../common/reservedPayees.js';
+import { maybeEnrichCcInflowError } from '../common/ccInflowValidation.js';
 import type { YnabTransactionsResponse, YnabPayeesResponse, UpdateTransactionWithId } from '../../types/index.js';
 
 /**
@@ -193,11 +194,27 @@ export class UpdateTransactionTool extends YnabTool {
         throw new Error('No fields provided to update. At least one field besides transaction_id must be specified.');
       }
 
-      // Update the transaction
-      const response: YnabTransactionsResponse = await this.client.updateTransactions(
-        input.budget_id,
-        [updateData]
-      );
+      // Update the transaction. On a YNAB 400 we try to enrich the error with
+      // the specific RTA-on-CC hint (#12) before letting it bubble.
+      let response: YnabTransactionsResponse;
+      try {
+        response = await this.client.updateTransactions(input.budget_id, [updateData]);
+      } catch (updateError) {
+        if (input.category_id) {
+          const accountId =
+            input.account_id ?? (await this.client.getTransaction(input.budget_id, input.transaction_id))?.account_id;
+          if (accountId) {
+            throw await maybeEnrichCcInflowError(
+              this.client,
+              updateError,
+              input.budget_id,
+              accountId,
+              input.category_id
+            );
+          }
+        }
+        throw updateError;
+      }
 
       if (!response.transactions || response.transactions.length === 0) {
         throw new Error('No transaction returned from YNAB API after update');
