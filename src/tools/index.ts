@@ -35,6 +35,14 @@ import { DeleteScheduledTransactionTool } from './scheduled/deleteScheduledTrans
 import { RecommendCategoryAllocationTool } from './analysis/recommendCategoryAllocation.js';
 import { AnalyzeSpendingPatternsTool } from './analysis/analyzeSpendingPatterns.js';
 import { DistributeToBebudgetedTool } from './analysis/distributeToBebudgeted.js';
+import {
+  AutoAssignUnderfundedTool,
+  AutoSweepPositivesTool,
+  AutoBalanceMonthTool,
+  ResetAvailableAmountsTool,
+  AssignSameAsLastMonthTool,
+  AssignAverageSpendTool,
+} from './budgeting/index.js';
 
 import type { Tool } from '../types/index.js';
 import type { YNABClient } from '../client/YNABClient.js';
@@ -94,6 +102,14 @@ export function registerTools(client: YNABClient): Tool[] {
     new RecommendCategoryAllocationTool(client),
     new AnalyzeSpendingPatternsTool(client),
     new DistributeToBebudgetedTool(client),
+
+    // Batch monthly budgeting tools
+    new AutoAssignUnderfundedTool(client),
+    new AutoSweepPositivesTool(client),
+    new AutoBalanceMonthTool(client),
+    new ResetAvailableAmountsTool(client),
+    new AssignSameAsLastMonthTool(client),
+    new AssignAverageSpendTool(client),
   ];
 }
 
