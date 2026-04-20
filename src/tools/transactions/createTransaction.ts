@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { YnabTool } from '../base.js';
 import { assertPayeeNameAllowed } from '../common/reservedPayees.js';
+import { maybeEnrichCcInflowError } from '../common/ccInflowValidation.js';
 import type { YnabTransactionsResponse, YnabPayeesResponse } from '../../types/index.js';
 
 /**
@@ -134,11 +135,21 @@ export class CreateTransactionTool extends YnabTool {
         import_id: input.import_id || null,
       };
 
-      // Create the transaction
-      const response: YnabTransactionsResponse = await this.client.createTransactions(
-        input.budget_id,
-        [transactionData]
-      );
+      // Create the transaction. On a generic YNAB 400 we try to enrich the
+      // error with the specific RTA-on-CC hint (issue #12) before letting
+      // it bubble to handleError.
+      let response: YnabTransactionsResponse;
+      try {
+        response = await this.client.createTransactions(input.budget_id, [transactionData]);
+      } catch (createError) {
+        throw await maybeEnrichCcInflowError(
+          this.client,
+          createError,
+          input.budget_id,
+          input.account_id,
+          input.category_id ?? null
+        );
+      }
 
       if (!response.transactions || response.transactions.length === 0) {
         throw new Error('No transaction returned from YNAB API');
