@@ -178,6 +178,20 @@ describe('Tool Registry', () => {
     });
   });
 
+  describe('Budgeting tools', () => {
+    it.each([
+      'ynab_auto_assign_underfunded',
+      'ynab_auto_sweep_positives',
+      'ynab_auto_balance_month',
+      'ynab_reset_available_amounts',
+      'ynab_assign_same_as_last_month',
+      'ynab_assign_average_spend',
+    ])('registers %s', (name) => {
+      const tool = registeredTools.find(t => t.name === name);
+      expect(tool).toBeDefined();
+    });
+  });
+
   describe('Tool uniqueness', () => {
     it('all tool names are unique', () => {
       const names = registeredTools.map(t => t.name);
