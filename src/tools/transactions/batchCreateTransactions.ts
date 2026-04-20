@@ -4,8 +4,6 @@ import { assertPayeeNameAllowed } from '../common/reservedPayees.js';
 import { YNABError } from '../../client/ErrorHandler.js';
 import type { SaveTransaction, YnabTransaction, YnabTransactionsResponse } from '../../types/index.js';
 
-// One transaction in a batch-create payload. Mirrors create_transaction but
-// makes import_id optional and defaults approved=true (user-initiated).
 const BatchCreateTransactionInputSchema = z.object({
   account_id: z.string().describe('The account ID where the transaction will be created'),
   category_id: z.string().nullable().optional().describe('The category ID for the transaction. Use null for transfers or income'),
@@ -31,7 +29,7 @@ type BatchCreateInput = z.infer<typeof BatchCreateInputSchema>;
 
 interface CreatedTransactionSummary {
   id: string;
-  // Submission index when correlate-able (import_id present or per-row fallback), else null. In bulk mode without import_ids YNAB does not guarantee response order matches submission order.
+  /** Submission index, or null when bulk mode can't correlate (no import_id). */
   index: number | null;
   date: string;
   amount: { milliunits: number; formatted: string };
@@ -52,7 +50,7 @@ export interface BatchCreateResult {
   created: CreatedTransactionSummary[];
   failed: FailedTransaction[];
   duplicate_import_ids: string[];
-  // null when no successful API call was made (e.g. every fallback row failed). Avoids callers confusing 0 with "no prior knowledge" for delta sync.
+  /** null when no successful API call was made — avoids delta-sync callers confusing 0 with "no prior knowledge". */
   server_knowledge: number | null;
   summary: {
     total_submitted: number;
@@ -98,9 +96,7 @@ function summarize(tx: YnabTransaction, index: number | null): CreatedTransactio
   };
 }
 
-// Only YNAB 400 and 409 (conflict) hint at "a specific row is bad." Auth
-// (401/403), rate-limit (429), 5xx, and network errors are system-level
-// problems where per-row fallback would just amplify the damage.
+// Only 400/409 hint at a specific row being at fault; anything else is system-level and per-row fallback would amplify the damage.
 function shouldFallbackOn(err: unknown): boolean {
   if (!(err instanceof YNABError)) return false;
   return err.statusCode === 400 || err.statusCode === 409;
@@ -135,9 +131,7 @@ export class BatchCreateTransactionsTool extends YnabTool {
     const payload = input.transactions.map(toSaveTransaction);
     const response: YnabTransactionsResponse = await this.client.createTransactions(input.budget_id, payload);
 
-    // Correlate created rows back to submission order via import_id when
-    // supplied. Without it, YNAB response order is not guaranteed to match
-    // submission order, so we record index=null for those rows.
+    // YNAB doesn't guarantee bulk response order matches submission order; correlate via import_id when supplied, index=null otherwise.
     const submissionIndexByImportId = new Map<string, number>();
     input.transactions.forEach((t, i) => {
       if (t.import_id) submissionIndexByImportId.set(t.import_id, i);
@@ -190,9 +184,7 @@ export class BatchCreateTransactionsTool extends YnabTool {
         created.push(summarize(resp.transactions[0]!, index));
         serverKnowledge = resp.server_knowledge;
       } catch (error) {
-        // Only client-level 400/409 belong per-row; re-raise anything else
-        // (rate-limit, 5xx, network) instead of silently marking 100 rows
-        // as failed while the server is down.
+        // Re-raise non-4xx (rate-limit, 5xx, network) so we stop hammering a degraded server.
         if (!shouldFallbackOn(error)) throw error;
         const message = error instanceof Error ? error.message : String(error);
         failed.push({
