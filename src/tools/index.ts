@@ -12,6 +12,7 @@ import { CreateTransactionTool } from './transactions/createTransaction.js';
 import { UpdateTransactionTool } from './transactions/updateTransaction.js';
 import { DeleteTransactionTool } from './transactions/deleteTransaction.js';
 import { BatchUpdateTransactionsTool } from './transactions/batchUpdateTransactions.js';
+import { BatchCreateTransactionsTool } from './transactions/batchCreateTransactions.js';
 import { CreateSplitTransactionTool } from './transactions/createSplitTransaction.js';
 import { UpdateTransactionSplitsTool } from './transactions/updateTransactionSplits.js';
 import { ExportTransactionsTool } from './transactions/exportTransactions.js';
@@ -65,6 +66,7 @@ export function registerTools(client: YNABClient): Tool[] {
     new UpdateTransactionTool(client),
     new DeleteTransactionTool(client),
     new BatchUpdateTransactionsTool(client),
+    new BatchCreateTransactionsTool(client),
     new CreateSplitTransactionTool(client),
     new UpdateTransactionSplitsTool(client),
     new ExportTransactionsTool(client),

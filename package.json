@@ -1,6 +1,6 @@
 {
   "name": "ynab-mcp-server",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Comprehensive Model Context Protocol server providing intelligent access to YNAB (You Need A Budget) data with AI-powered budget recommendations, spending analysis, and complete transaction management",
   "type": "module",
   "main": "dist/index.js",
