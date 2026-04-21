@@ -7,6 +7,7 @@ This document provides comprehensive documentation for all 30+ tools available i
 - [Budget & Account Management](#budget--account-management)
 - [Transaction Management](#transaction-management)
 - [Category & Budget Management](#category--budget-management)
+- [Budgeting Automation](#budgeting-automation)
 - [Payee Management](#payee-management)
 - [Scheduled Transactions](#scheduled-transactions)
 - [Transfer Management](#transfer-management)
@@ -139,14 +140,18 @@ Get all accounts for a specific budget with detailed balance information.
 
 ### `ynab_get_budget_month`
 
-Get detailed monthly budget data for a specific month.
+Get budget data for a specific month. Response is trimmed by default to keep payloads small: only active categories are included, goal metadata and deleted categories are always omitted.
 
 **Parameters:**
 ```typescript
 {
-  budget_id: string;        // Required: Budget ID
-  month: string;            // Required: Month in YYYY-MM-DD format (first day of month)
-  include_categories?: boolean;  // Include detailed category data
+  budget_id: string;          // Required: Budget ID
+  month: string;              // Required: YYYY-MM-01 (first day of month)
+  category_filter?:           // Default: 'active'
+    | 'active'          // budgeted/activity/balance non-zero
+    | 'with_activity'   // activity non-zero
+    | 'with_balance'    // balance non-zero
+    | 'all';            // every non-deleted category (including zero-balance)
 }
 ```
 
@@ -155,42 +160,39 @@ Get detailed monthly budget data for a specific month.
 {
   month: {
     month: string;
-    note: string | null;
-    income: number;           // Total income in milliunits
-    budgeted: number;         // Total budgeted in milliunits
-    activity: number;         // Total activity in milliunits
-    to_be_budgeted: number;   // Available to budget in milliunits
+    income: { milliunits: number; formatted: string };
+    budgeted: { milliunits: number; formatted: string };
+    activity: { milliunits: number; formatted: string };
+    to_be_budgeted: { milliunits: number; formatted: string };
     age_of_money: number | null;
-    deleted: boolean;
-    categories?: Array<{
+    note?: string;            // Only present when non-empty
+    categories: Array<{
       id: string;
+      category_group_id: string;
+      category_group_name: string;
       name: string;
-      budgeted: number;       // Budgeted amount in milliunits
-      activity: number;       // Actual spending in milliunits
-      balance: number;        // Category balance in milliunits
-      goal_type: string | null;
-      goal_day: number | null;
-      goal_cadence: number | null;
-      goal_cadence_frequency: number | null;
-      goal_creation_month: string | null;
-      goal_target: number | null;
-      goal_target_month: string | null;
-      goal_percentage_complete: number | null;
-      goal_months_to_budget: number | null;
-      goal_under_funded: number | null;
-      goal_overall_funded: number | null;
-      goal_overall_left: number | null;
+      hidden: boolean;
+      budgeted: { milliunits: number; formatted: string };
+      activity: { milliunits: number; formatted: string };
+      balance: { milliunits: number; formatted: string };
+      note?: string;          // Only present when non-empty
     }>;
   };
+  server_knowledge: number;
 }
 ```
+
+**Notes:**
+- Goal fields (`goal_type`, `goal_target`, `goal_percentage_complete`, etc.) are never returned. Use `ynab_get_category` when goal metadata is needed for a specific category.
+- `deleted` categories are always excluded, regardless of `category_filter`.
+- Default `'active'` is tuned for the common "show me what's happening this month" use. Use `'all'` for full dumps or diffing against external data.
 
 **Example:**
 ```json
 {
   "budget_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
   "month": "2024-01-01",
-  "include_categories": true
+  "category_filter": "active"
 }
 ```
 
@@ -589,15 +591,18 @@ Update the splits of an existing split transaction.
 
 ### `ynab_get_categories`
 
-Get all category groups and categories for a budget.
+Get category groups and categories for a budget. Response is trimmed by default to keep payloads small: only active categories are included, goal metadata and deleted groups/categories are always omitted, and empty groups are dropped.
 
 **Parameters:**
 ```typescript
 {
   budget_id: string;                    // Required: Budget ID
-  last_knowledge_of_server?: number;   // For delta sync
-  include_hidden?: boolean;             // Include hidden categories (default: false)
-  include_deleted?: boolean;            // Include deleted categories (default: false)
+  category_filter?:                     // Default: 'active'
+    | 'active'          // budgeted/activity/balance non-zero
+    | 'with_activity'   // activity non-zero
+    | 'with_balance'    // balance non-zero
+    | 'all';            // every non-deleted category (including zero-balance)
+  last_knowledge_of_server?: number;    // For delta sync
 }
 ```
 
@@ -608,41 +613,28 @@ Get all category groups and categories for a budget.
     id: string;
     name: string;
     hidden: boolean;
-    deleted: boolean;
     categories: Array<{
       id: string;
+      category_group_id: string;
+      category_group_name: string;
       name: string;
       hidden: boolean;
-      original_category_group_id: string | null;
-      note: string | null;
-      budgeted: number;                 // Current month budgeted amount
-      activity: number;                 // Current month activity
-      balance: number;                  // Current balance
-      goal_type: 'TB' | 'TBD' | 'MF' | 'NEED' | 'DEBT' | null;
-      goal_day: number | null;
-      goal_cadence: number | null;
-      goal_cadence_frequency: number | null;
-      goal_creation_month: string | null;
-      goal_target: number | null;
-      goal_target_month: string | null;
-      goal_percentage_complete: number | null;
-      goal_months_to_budget: number | null;
-      goal_under_funded: number | null;
-      goal_overall_funded: number | null;
-      goal_overall_left: number | null;
-      deleted: boolean;
+      budgeted: { milliunits: number; formatted: string };  // Current month
+      activity: { milliunits: number; formatted: string };  // Current month
+      balance: { milliunits: number; formatted: string };   // Current balance
+      note?: string;                                        // Only present when non-empty
     }>;
   }>;
   server_knowledge: number;
 }
 ```
 
-**Goal Types:**
-- `TB` - Target Balance
-- `TBD` - Target Balance by Date
-- `MF` - Monthly Funding
-- `NEED` - Plan Your Spending
-- `DEBT` - Debt Payoff
+**Notes:**
+- Goal fields (`goal_type`, `goal_target`, `goal_percentage_complete`, etc.) are never returned. Use `ynab_get_category` when goal metadata is needed for a specific category.
+- `deleted` groups and categories are always excluded, regardless of `category_filter`.
+- Groups with zero matching categories after filtering are omitted from the response.
+- Default `'active'` is tuned for the common "show me what's configured" use. Use `'all'` for full dumps or diffing against external data.
+- **Delta sync safety:** When `last_knowledge_of_server` is set and `category_filter` is omitted, the filter is forced to `'all'`. Under delta sync, any filter that rejects zero-valued categories would silently drop categories that just changed to zero — the caller would then advance `server_knowledge` past those changes and never see them. Pass an explicit `category_filter` to override this if you've accepted the risk.
 
 ---
 
@@ -761,6 +753,119 @@ Update the budgeted amount for a category in a specific month.
   };
 }
 ```
+
+---
+
+## Budgeting Automation
+
+Tools that mutate `budgeted` amounts across many categories in one call. All seven share a common input schema and response shape; the per-tool sections below document only what's distinctive.
+
+### Shared input
+
+```typescript
+interface BaseBudgetingInput {
+  budget_id: string;                      // Required
+  month: string;                          // Required: YYYY-MM-01
+  include_categories?: string[];          // Restrict to these (by id or case-insensitive name)
+  exclude_categories?: string[];          // Skip these (by id or case-insensitive name)
+  skip_closed_cc_categories?: boolean;    // Default: true
+  skip_hidden?: boolean;                  // Default: true
+  dry_run?: boolean;                      // Default: false — plan without PATCHing
+}
+```
+
+### Shared response (`BudgetingResult`)
+
+```typescript
+{
+  phase: string;                          // Tool-specific identifier
+  dry_run: boolean;
+  categories_touched: number;
+  total_moved_milliunits: number;
+  to_be_budgeted_before: { milliunits: number; formatted: string };
+  to_be_budgeted_after: { milliunits: number; formatted: string } | null;  // null on dry_run
+  skipped_count: number;
+  skipped_by_reason: Record<string, number>;  // e.g. { hidden: 36, ready_to_assign: 3 }
+  details: Array<{
+    category_id: string;
+    category_name: string;
+    previous_budgeted: number;
+    new_budgeted: number;
+    delta: number;
+    status: 'applied' | 'planned' | 'skipped_noop' | 'failed';
+    error?: string;
+  }>;
+  failed: Array<{ category_id: string; category_name: string; error: string }>;
+}
+```
+
+**Skip reasons** (`skipped_by_reason` keys): `excluded`, `not_included`, `hidden`, `deleted`, `ready_to_assign`, `closed_cc`, `goal_carryover`, `goal`, `no_prior_month` (assign-same-as-last-month only), `no_history` (assign-average-spend only).
+
+### `ynab_auto_sweep_positives`
+
+Sweeps positive activity (refunds, reimbursements, interest) back to Ready-to-Assign by reducing `budgeted` by `activity`. Preserves savings: categories with a goal *and* a positive prior-month carryover are skipped (`skipped_by_reason.goal_carryover`).
+
+**Parameters:** `BaseBudgetingInput` (no extras). **Phase:** `sweep_positives`.
+
+### `ynab_auto_reduce_overfunded`
+
+Frees money stuck in over-funded categories — the counterpart to sweep. Reduces `budgeted` so excess above prior-month carryover returns to Ready-to-Assign. Never drives `budgeted` below zero. Skips *every* category with a goal (`skipped_by_reason.goal`).
+
+**Parameters:** `BaseBudgetingInput` (no extras). **Phase:** `reduce_overfunded`.
+
+### `ynab_auto_assign_underfunded`
+
+Mirrors YNAB's "Auto-Assign: Underfunded" button. Funds every category with a negative month-balance to exactly $0.
+
+**Parameters:** `BaseBudgetingInput` (no extras). **Phase:** `assign_underfunded`.
+
+### `ynab_auto_balance_month`
+
+Composes sweep-positives → reduce-overfunded → assign-underfunded in one call. Loads accounts + month once; reuses the account list across phases (saves rate-limit budget).
+
+**Parameters:**
+```typescript
+BaseBudgetingInput & {
+  reduce_overfunded?: boolean;   // Default: true. Set false to skip the middle phase.
+}
+```
+
+**Response:** different from the shared shape — aggregates sub-phase results.
+```typescript
+{
+  phase: 'balance_month';
+  dry_run: boolean;
+  phases: BudgetingResult[];     // Sweep, (reduce), assign in order
+  total_moved_milliunits: number;
+}
+```
+
+**Note:** in `dry_run`, each phase's planned changes are simulated forward so the same category doesn't appear in multiple phases' details.
+
+### `ynab_assign_same_as_last_month`
+
+For each filtered category, copies the previous month's `budgeted` amount. Categories absent from the prior month are skipped (`skipped_by_reason.no_prior_month`).
+
+**Parameters:** `BaseBudgetingInput` (no extras). **Phase:** `assign_same_as_last_month`.
+
+### `ynab_assign_average_spend`
+
+Assigns each category an amount equal to its rolling average *outflow* over recent months. Positive activity (refunds) is ignored so the average reflects real spending. Categories with no outflow history in the window are skipped (`skipped_by_reason.no_history`).
+
+**Parameters:**
+```typescript
+BaseBudgetingInput & {
+  lookback_months?: number;   // Default: 3, range 1–12
+}
+```
+
+**Response:** `BudgetingResult` plus `lookback_used: number` (the actual max window observed; may be less than requested if a category is newer than `lookback_months`). **Phase:** `assign_average_spend`.
+
+### `ynab_reset_available_amounts`
+
+Mirrors YNAB's "Reset Available Amounts": sets every filtered category's balance to exactly $0 for the month by adjusting `budgeted` by `-balance`. Positive balances flow back to Ready-to-Assign; negative balances are covered from it.
+
+**Parameters:** `BaseBudgetingInput` (no extras). **Phase:** `reset_available_amounts`.
 
 ---
 

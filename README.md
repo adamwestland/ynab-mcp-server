@@ -88,7 +88,7 @@ This server provides **30+ specialized tools** organized into these categories:
 ### Budget & Account Management (3 tools)
 - `ynab_list_budgets` - Get all accessible budgets with metadata
 - `ynab_get_accounts` - Retrieve account details, balances, and settings
-- `ynab_get_budget_month` - Get monthly budget data with category allocations
+- `ynab_get_budget_month` - Get monthly budget data (trimmed by default; use `category_filter: 'all'` for full list)
 
 ### Transaction Management (12 tools)
 - `ynab_get_transactions` - Query transactions with advanced filtering
@@ -106,9 +106,18 @@ This server provides **30+ specialized tools** organized into these categories:
 - `ynab_unlink_transfer` - Remove transfer links
 
 ### Category & Budget Management (3 tools)
-- `ynab_get_categories` - Get category groups and individual categories
+- `ynab_get_categories` - Get category groups and individual categories (trimmed by default; use `category_filter: 'all'` for full list)
 - `ynab_get_category` - Get detailed category information
 - `ynab_update_category_budget` - Adjust category budget allocations
+
+### Budgeting Automation (7 tools)
+- `ynab_auto_sweep_positives` - Sweep positive activity (refunds, interest) back to Ready-to-Assign
+- `ynab_auto_reduce_overfunded` - Free money stuck in over-funded categories (preserves carryover, skips goals)
+- `ynab_auto_assign_underfunded` - Fund every negative-balance category to exactly $0
+- `ynab_auto_balance_month` - Sweep → reduce → assign, composed in one call with `dry_run` support
+- `ynab_assign_same_as_last_month` - Copy previous month's budgeted amounts
+- `ynab_assign_average_spend` - Assign rolling average of recent outflow per category
+- `ynab_reset_available_amounts` - Set every category's balance to $0 for the month
 
 ### Payee Management (3 tools)
 - `ynab_get_payees` - List all payees with metadata
