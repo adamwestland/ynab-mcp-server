@@ -244,6 +244,67 @@ describe('GetCategoriesTool', () => {
       }
     });
   });
+
+  describe('delta sync safety', () => {
+    it('forces category_filter to "all" when last_knowledge_of_server is set (prevents silent data loss)', async () => {
+      // A category that changed to zero would be in the delta but dropped by the active filter,
+      // causing silent drift for incremental-sync consumers.
+      const zeroed = createMockCategory({ id: 'zeroed', name: 'Zeroed', budgeted: 0, activity: 0, balance: 0 });
+      const group = createMockCategoryGroup(0, { id: 'g1', name: 'G' });
+      group.categories = [zeroed];
+      client.getCategories.mockResolvedValue({ category_groups: [group], server_knowledge: 200 });
+
+      const result = await tool.execute({
+        budget_id: 'b',
+        last_knowledge_of_server: 100,
+        // category_filter defaults to 'active' but should be overridden to 'all' under delta sync
+      });
+
+      expect(result.category_groups).toHaveLength(1);
+      expect(result.category_groups[0]!.categories).toHaveLength(1);
+      expect(result.category_groups[0]!.categories[0]!.id).toBe('zeroed');
+    });
+
+    it('does not drop deleted categories when forcing all filter under delta sync', async () => {
+      // Even under delta sync, deleted categories should still be excluded —
+      // they're communicated via the top-level deleted flag on the original response,
+      // but the processed output already strips that. So dropping them is fine;
+      // what matters is that non-deleted-zero changes survive.
+      const live = createMockCategory({ id: 'live', name: 'Live', budgeted: 0, activity: 0, balance: 0, deleted: false });
+      const gone = createMockCategory({ id: 'gone', name: 'Gone', budgeted: 0, activity: 0, balance: 0, deleted: true });
+      const group = createMockCategoryGroup(0, { id: 'g1', name: 'G' });
+      group.categories = [live, gone];
+      client.getCategories.mockResolvedValue({ category_groups: [group], server_knowledge: 300 });
+
+      const result = await tool.execute({
+        budget_id: 'b',
+        last_knowledge_of_server: 200,
+      });
+
+      const ids = result.category_groups[0]!.categories.map(c => c.id);
+      expect(ids).toContain('live');
+      expect(ids).not.toContain('gone');
+    });
+
+    it('respects explicit category_filter even with delta sync (user opt-out)', async () => {
+      // If caller explicitly asks for 'active' with delta sync, they've read the docs
+      // and accepted the risk — we respect their choice.
+      const zeroed = createMockCategory({ id: 'zeroed', name: 'Zeroed', budgeted: 0, activity: 0, balance: 0 });
+      const active = createMockCategory({ id: 'active', name: 'Active', budgeted: 100000, activity: 0, balance: 100000 });
+      const group = createMockCategoryGroup(0, { id: 'g1', name: 'G' });
+      group.categories = [zeroed, active];
+      client.getCategories.mockResolvedValue({ category_groups: [group], server_knowledge: 200 });
+
+      const result = await tool.execute({
+        budget_id: 'b',
+        last_knowledge_of_server: 100,
+        category_filter: 'active',
+      });
+
+      const ids = result.category_groups[0]!.categories.map(c => c.id);
+      expect(ids).toEqual(['active']);
+    });
+  });
 });
 
 describe('GetCategoryTool', () => {

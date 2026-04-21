@@ -183,7 +183,7 @@ Get budget data for a specific month. Response is trimmed by default to keep pay
 ```
 
 **Notes:**
-- Goal fields (`goal_type`, `goal_target`, `goal_percentage_complete`, etc.) are never returned. Use `ynab_get_categories` / `ynab_get_category` when goal metadata is needed.
+- Goal fields (`goal_type`, `goal_target`, `goal_percentage_complete`, etc.) are never returned. Use `ynab_get_category` when goal metadata is needed for a specific category.
 - `deleted` categories are always excluded, regardless of `category_filter`.
 - Default `'active'` is tuned for the common "show me what's happening this month" use. Use `'all'` for full dumps or diffing against external data.
 
@@ -634,6 +634,7 @@ Get category groups and categories for a budget. Response is trimmed by default 
 - `deleted` groups and categories are always excluded, regardless of `category_filter`.
 - Groups with zero matching categories after filtering are omitted from the response.
 - Default `'active'` is tuned for the common "show me what's configured" use. Use `'all'` for full dumps or diffing against external data.
+- **Delta sync safety:** When `last_knowledge_of_server` is set and `category_filter` is omitted, the filter is forced to `'all'`. Under delta sync, any filter that rejects zero-valued categories would silently drop categories that just changed to zero — the caller would then advance `server_knowledge` past those changes and never see them. Pass an explicit `category_filter` to override this if you've accepted the risk.
 
 ---
 

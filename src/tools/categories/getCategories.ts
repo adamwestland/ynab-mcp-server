@@ -7,10 +7,10 @@ type CategoryFilter = z.infer<typeof CategoryFilterSchema>;
 
 const GetCategoriesInputSchema = z.object({
   budget_id: z.string().describe('The ID of the budget to get categories for'),
-  category_filter: CategoryFilterSchema.optional().default('active').describe(
-    'Which categories to include. "active" (default): budgeted/activity/balance non-zero. "with_activity": activity non-zero. "with_balance": balance non-zero. "all": every non-deleted category (including zero-balance). Deleted categories/groups and goal metadata are always omitted.'
+  category_filter: CategoryFilterSchema.optional().describe(
+    'Which categories to include. "active" (default): budgeted/activity/balance non-zero. "with_activity": activity non-zero. "with_balance": balance non-zero. "all": every non-deleted category (including zero-balance). When last_knowledge_of_server is set and category_filter is omitted, "all" is used instead of "active" to prevent silent data loss on categories that changed to zero. Deleted categories/groups and goal metadata are always omitted.'
   ),
-  last_knowledge_of_server: z.number().optional().describe('Server knowledge for delta sync - only return data modified since this value'),
+  last_knowledge_of_server: z.number().optional().describe('Server knowledge for delta sync - only return data modified since this value. With delta sync, any filtering is applied AFTER the delta fetch, so a category that changed to all-zero values would be silently dropped by the default "active" filter. When this is set and no explicit category_filter is passed, the filter is forced to "all" to preserve delta fidelity.'),
 });
 
 type GetCategoriesInput = z.infer<typeof GetCategoriesInputSchema>;
@@ -71,6 +71,13 @@ export class GetCategoriesTool extends YnabTool {
   }> {
     const input = this.validateArgs<GetCategoriesInput>(args);
 
+    // Under delta sync, any filter that rejects zero-valued categories would silently drop
+    // categories that just changed to zero — the caller would advance server_knowledge past
+    // the change and never see it. Default to "all" in that case so incremental consumers
+    // stay consistent. Explicit category_filter is honored for callers who opt into the risk.
+    const filter: CategoryFilter =
+      input.category_filter ?? (input.last_knowledge_of_server !== undefined ? 'all' : 'active');
+
     try {
       const requestOptions = {
         ...(input.last_knowledge_of_server !== undefined && {
@@ -89,7 +96,7 @@ export class GetCategoriesTool extends YnabTool {
 
         const categories: ProcessedCategory[] = [];
         for (const category of group.categories) {
-          if (!shouldInclude(category, input.category_filter)) continue;
+          if (!shouldInclude(category, filter)) continue;
 
           const processed: ProcessedCategory = {
             id: category.id,
