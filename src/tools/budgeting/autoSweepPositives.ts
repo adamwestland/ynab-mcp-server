@@ -6,6 +6,7 @@ import {
   buildFilterOptions,
   loadBudgetingContext,
   refreshToBeBudgeted,
+  summarizeSkipped,
   wrapAmount,
   formatAmount,
   type BaseBudgetingInput,
@@ -73,7 +74,7 @@ export class AutoSweepPositivesTool extends YnabTool {
       total_moved_milliunits: result.total_moved_milliunits,
       to_be_budgeted_before: formatAmount(ctx.toBeBudgetedBefore),
       to_be_budgeted_after: wrapAmount(toBeBudgetedAfter),
-      skipped,
+      ...summarizeSkipped(skipped),
       details: result.details,
       failed: result.failed,
     };

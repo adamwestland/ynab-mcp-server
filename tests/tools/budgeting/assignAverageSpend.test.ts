@@ -112,6 +112,7 @@ describe('AssignAverageSpendTool', () => {
     });
 
     expect(client.updateCategoryBudget).not.toHaveBeenCalled();
-    expect(r.skipped.some(s => s.category_id === catId && s.reason === 'no_history')).toBe(true);
+    expect(r.skipped_by_reason.no_history).toBeGreaterThanOrEqual(1);
+    expect(r.skipped_count).toBeGreaterThanOrEqual(1);
   });
 });

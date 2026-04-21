@@ -112,7 +112,7 @@ describe('AutoAssignUnderfundedTool', () => {
 
     expect(client.updateCategoryBudget).toHaveBeenCalledTimes(1);
     expect(client.updateCategoryBudget).toHaveBeenCalledWith('b1', 'c-food', '2024-01-01', 30000);
-    expect(result.skipped.some(s => s.category_id === 'c-cc-closed' && s.reason === 'closed_cc')).toBe(true);
+    expect(result.skipped_by_reason.closed_cc).toBe(1);
   });
 
   it('include list narrows work; exclude list removes funded candidates', async () => {
