@@ -39,6 +39,7 @@ import { DistributeToBebudgetedTool } from './analysis/distributeToBebudgeted.js
 import {
   AutoAssignUnderfundedTool,
   AutoSweepPositivesTool,
+  AutoReduceOverfundedTool,
   AutoBalanceMonthTool,
   ResetAvailableAmountsTool,
   AssignSameAsLastMonthTool,
@@ -108,6 +109,7 @@ export function registerTools(client: YNABClient): Tool[] {
     // Batch monthly budgeting tools
     new AutoAssignUnderfundedTool(client),
     new AutoSweepPositivesTool(client),
+    new AutoReduceOverfundedTool(client),
     new AutoBalanceMonthTool(client),
     new ResetAvailableAmountsTool(client),
     new AssignSameAsLastMonthTool(client),

@@ -39,6 +39,8 @@ export interface CategoryFilterOptions {
   closed_cc_account_names?: string[];
   /** Skip categories that have a savings goal and carry a positive balance over from the previous month. Default false; sweep-style tools opt in. */
   skip_goal_carryover?: boolean;
+  /** Skip every category with a goal (regardless of carryover). Default false; the reduce-overfunded phase opts in so it never claws back goal funding. */
+  skip_goals?: boolean;
 }
 
 export interface FilteredCategory {
@@ -52,6 +54,7 @@ export interface FilteredCategory {
     | 'ready_to_assign'
     | 'closed_cc'
     | 'goal_carryover'
+    | 'goal'
     /** Tool-specific: category did not exist in the month being copied from (assign-same-as-last-month). */
     | 'no_prior_month'
     /** Tool-specific: no outflow in the lookback window (assign-average-spend). */
@@ -120,6 +123,10 @@ export function filterCategories(
       closedSet.has(normalize(c.name))
     ) {
       skipped.push({ ...entry, reason: 'closed_cc' });
+      continue;
+    }
+    if (options.skip_goals && c.goal_type != null) {
+      skipped.push({ ...entry, reason: 'goal' });
       continue;
     }
     if (

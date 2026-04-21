@@ -166,6 +166,42 @@ describe('filterCategories', () => {
     });
   });
 
+  describe('skip_goals (reduce-overfunded style)', () => {
+    it('skips every category with a goal regardless of carryover', () => {
+      const goalWithCarryover = createMockCategory({
+        id: 'c-goal-carry', name: 'Vacation', goal_type: 'TB',
+        // prior_carryover = 100
+        budgeted: 50000, activity: 0, balance: 150000,
+      });
+      const goalNoCarryover = createMockCategory({
+        id: 'c-goal-fresh', name: 'New Laptop', goal_type: 'NEED',
+        // prior_carryover = 0
+        budgeted: 50000, activity: 0, balance: 50000,
+      });
+      const noGoal = createMockCategory({
+        id: 'c-plain', name: 'Other', goal_type: null,
+        budgeted: 100000, activity: 0, balance: 100000,
+      });
+      const { kept, skipped } = filterCategories(
+        [goalWithCarryover, goalNoCarryover, noGoal],
+        { skip_goals: true }
+      );
+      expect(kept.map(c => c.id)).toEqual(['c-plain']);
+      const byId = Object.fromEntries(skipped.map(s => [s.category_id, s.reason]));
+      expect(byId['c-goal-carry']).toBe('goal');
+      expect(byId['c-goal-fresh']).toBe('goal');
+    });
+
+    it('is disabled by default', () => {
+      const goalCat = createMockCategory({
+        id: 'c-goal', name: 'Vacation', goal_type: 'TB',
+        budgeted: 50000, activity: 0, balance: 50000,
+      });
+      const { kept } = filterCategories([goalCat]);
+      expect(kept).toHaveLength(1);
+    });
+  });
+
   it('include takes precedence: categories not in include are dropped even if otherwise kept', () => {
     const { kept, skipped } = filterCategories(cats(), { include: ['c-food'] });
     expect(kept.map(c => c.id)).toEqual(['c-food']);

@@ -54,7 +54,7 @@ export async function loadBudgetingContext(
 export function buildFilterOptions(
   input: BaseBudgetingInput,
   closedCcAccountNames: string[],
-  extra: Pick<CategoryFilterOptions, 'skip_goal_carryover'> = {}
+  extra: Pick<CategoryFilterOptions, 'skip_goal_carryover' | 'skip_goals'> = {}
 ): CategoryFilterOptions {
   const opts: CategoryFilterOptions = {
     skip_hidden: input.skip_hidden,
