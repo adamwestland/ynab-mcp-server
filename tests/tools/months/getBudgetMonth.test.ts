@@ -358,5 +358,22 @@ describe('GetBudgetMonthTool', () => {
       setup();
       await expect(tool.execute({ budget_id: 'b', month: '2024-01-01', category_filter: 'bogus' })).rejects.toThrow();
     });
+
+    it('excludes deleted categories from every filter mode (including "all")', async () => {
+      const live = createMockCategory({ id: 'live', name: 'Live', budgeted: 100000, activity: 0, balance: 100000, deleted: false });
+      const gone = createMockCategory({ id: 'gone', name: 'Deleted', budgeted: 50000, activity: -25000, balance: 25000, deleted: true });
+
+      for (const filter of ['active', 'with_activity', 'with_balance', 'all'] as const) {
+        const mockMonth = createMockBudgetMonth({ categories: [live, gone] });
+        client.getBudgetMonth.mockResolvedValue({ month: mockMonth, server_knowledge: 1 });
+        const group = createMockCategoryGroup(0, { id: 'g1', name: 'G' });
+        group.categories = [live, gone];
+        client.getCategories.mockResolvedValue({ category_groups: [group], server_knowledge: 1 });
+
+        const result = await tool.execute({ budget_id: 'b', month: '2024-01-01', category_filter: filter });
+        const ids = result.month.categories.map(c => c.id);
+        expect(ids).not.toContain('gone');
+      }
+    });
   });
 });

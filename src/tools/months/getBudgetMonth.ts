@@ -9,7 +9,7 @@ const GetBudgetMonthInputSchema = z.object({
   budget_id: z.string().describe('The ID of the budget to get month data for'),
   month: z.string().regex(/^\d{4}-\d{2}-01$/).describe('The budget month in YYYY-MM-01 format (first day of month)'),
   category_filter: CategoryFilterSchema.optional().default('active').describe(
-    'Which categories to include. "active" (default): budgeted/activity/balance non-zero. "with_activity": activity non-zero. "with_balance": balance non-zero. "all": every category. Zero-only rows and goal metadata are dropped from the response regardless of filter.'
+    'Which categories to include. "active" (default): budgeted/activity/balance non-zero. "with_activity": activity non-zero. "with_balance": balance non-zero. "all": every non-deleted category (including zero-balance). Deleted categories and goal metadata are always omitted.'
   ),
 });
 
@@ -44,6 +44,7 @@ interface ProcessedMonth {
 }
 
 function shouldInclude(c: YnabCategory, filter: CategoryFilter): boolean {
+  if (c.deleted) return false;
   switch (filter) {
     case 'all':
       return true;
