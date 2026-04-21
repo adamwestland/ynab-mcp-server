@@ -96,6 +96,39 @@ describe('AutoReduceOverfundedTool', () => {
     expect(result.categories_touched).toBe(0);
   });
 
+  it('never sets budgeted below zero on a pure-refund category (defers to sweep)', async () => {
+    // Refund only: budgeted=0, activity=10000, balance=10000, carryover=0.
+    // Without clamping, excess=10000 → new_budgeted=-10000 (a sweep, not a reduce).
+    // Standalone, this should be skipped: refunds belong to sweep_positives.
+    const refund = createMockCategory({
+      id: 'c-refund', name: 'Amazon', category_group_name: 'Shopping', goal_type: null,
+      budgeted: 0, activity: 10000, balance: 10000,
+    });
+    client.getBudgetMonth.mockResolvedValue(monthResponse([refund]));
+
+    const result = await tool.execute({ budget_id: 'b1', month: '2024-01-01', skip_closed_cc_categories: false });
+
+    expect(client.updateCategoryBudget).not.toHaveBeenCalled();
+    expect(result.categories_touched).toBe(0);
+  });
+
+  it('partially reduces an over-funded category that also has a refund (clamps at 0)', async () => {
+    // budgeted=5000, activity=10000 (refund), balance=15000, carryover=0
+    // Naive: new_budgeted = 5000 - 15000 = -10000 (would over-claim)
+    // Clamped: new_budgeted = 0, delta = -5000 — frees only the over-budgeted
+    // portion; the 10k refund stays for sweep_positives to handle.
+    const mixed = createMockCategory({
+      id: 'c-mixed', name: 'Mixed', category_group_name: 'G', goal_type: null,
+      budgeted: 5000, activity: 10000, balance: 15000,
+    });
+    client.getBudgetMonth.mockResolvedValue(monthResponse([mixed]));
+
+    const result = await tool.execute({ budget_id: 'b1', month: '2024-01-01', skip_closed_cc_categories: false });
+
+    expect(client.updateCategoryBudget).toHaveBeenCalledWith('b1', 'c-mixed', '2024-01-01', 0);
+    expect(result.total_moved_milliunits).toBe(5000);
+  });
+
   it('skips a category whose entire positive balance is prior carryover (no excess)', async () => {
     // budgeted=0, activity=0, balance=1000 → carryover=1000, excess=0 → no change
     const savedUp = createMockCategory({

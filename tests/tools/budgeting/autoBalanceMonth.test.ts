@@ -106,6 +106,30 @@ describe('AutoBalanceMonthTool', () => {
     ]);
   });
 
+  it('dry_run simulates each phase forward — refund category does not double-count', async () => {
+    // Pure refund: budgeted=0, activity=10000, balance=10000.
+    // Sweep would PATCH to budgeted=-10000 (delta=-10000).
+    // After simulation, balance becomes 0 → reduce sees nothing to do.
+    // Without forward-simulation, reduce would re-plan this same category
+    // (clamped to 0 delta) and assign would see balance > 0 still.
+    const refund = createMockCategory({
+      id: 'c-refund', name: 'Amazon', category_group_name: 'Shopping', goal_type: null,
+      budgeted: 0, activity: 10000, balance: 10000,
+    });
+    client.getBudgetMonth.mockResolvedValue(monthResponse([refund]));
+
+    const result = await tool.execute({
+      budget_id: 'b1', month: '2024-01-01', dry_run: true, skip_closed_cc_categories: false,
+    });
+
+    const [sweep, reduce, assign] = result.phases;
+    expect(sweep!.categories_touched).toBe(1);
+    expect(reduce!.categories_touched).toBe(0);
+    expect(assign!.categories_touched).toBe(0);
+    // Total moved should equal sweep alone, not sweep+reduce double-count.
+    expect(result.total_moved_milliunits).toBe(10000);
+  });
+
   it('reduce_overfunded:false skips the middle phase (back to original two-phase behavior)', async () => {
     const refund = createMockCategory({
       id: 'c-refund', name: 'Amazon', category_group_name: 'Shopping', goal_type: null,

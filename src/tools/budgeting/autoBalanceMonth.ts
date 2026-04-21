@@ -48,21 +48,25 @@ export class AutoBalanceMonthTool extends YnabTool {
 
       const phases: BudgetingResult[] = [sweepResult];
 
-      // Phase 2 (optional): reduce overfunded. Refresh the month so balances
-      // reflect the sweep PATCHes (unless dry_run). Reuses closed-CC names.
+      // Phase 2 (optional): reduce overfunded. In live mode, re-fetch so
+      // balances reflect the sweep PATCHes. In dry_run, simulate the sweep's
+      // planned changes against the in-memory context — otherwise the same
+      // category (e.g. a refund) shows up in both phases' details and inflates
+      // the simulated totals.
       let nextCtx: BudgetingContext = sweepCtx;
       if (input.reduce_overfunded) {
         nextCtx = input.dry_run
-          ? sweepCtx
+          ? applyPlannedToContext(sweepCtx, sweepResult)
           : await loadMonthOnlyContext(this.client, input, sweepCtx.closedCcAccountNames);
         const reduceResult = await reduce.executeWithContext(input, nextCtx);
         phases.push(reduceResult);
       }
 
-      // Phase 3: assign. Refresh again so balances reflect any reduce
-      // PATCHes (unless dry_run, in which case the prior context is reused).
+      // Phase 3: assign. Same dry_run treatment — simulate the prior phase's
+      // planned changes forward.
+      const lastPhaseResult = phases[phases.length - 1]!;
       const assignCtx = input.dry_run
-        ? nextCtx
+        ? applyPlannedToContext(nextCtx, lastPhaseResult)
         : await loadMonthOnlyContext(this.client, input, sweepCtx.closedCcAccountNames);
       const assignResult = await assign.executeWithContext(input, assignCtx);
       phases.push(assignResult);
@@ -77,6 +81,35 @@ export class AutoBalanceMonthTool extends YnabTool {
       this.handleError(error, 'auto-balance month');
     }
   }
+}
+
+/** Advance an in-memory context forward by applying a phase's planned
+ * changes. Used for dry_run between phases — without this, every phase
+ * sees the original pre-sweep state and the same category can appear in
+ * multiple phases' planned details. */
+function applyPlannedToContext(ctx: BudgetingContext, result: BudgetingResult): BudgetingContext {
+  const deltaByCat = new Map<string, number>();
+  for (const d of result.details) {
+    if (d.status === 'planned' || d.status === 'applied') {
+      deltaByCat.set(d.category_id, d.delta);
+    }
+  }
+  if (deltaByCat.size === 0) return ctx;
+
+  const updatedCategories = ctx.categories.map(c => {
+    const delta = deltaByCat.get(c.id);
+    if (delta === undefined || delta === 0) return c;
+    return { ...c, budgeted: c.budgeted + delta, balance: c.balance + delta };
+  });
+
+  // RTA moves opposite to budgeted: +budgeted means -RTA.
+  const totalBudgetedDelta = Array.from(deltaByCat.values()).reduce((s, d) => s + d, 0);
+
+  return {
+    ...ctx,
+    categories: updatedCategories,
+    toBeBudgetedBefore: ctx.toBeBudgetedBefore - totalBudgetedDelta,
+  };
 }
 
 async function loadMonthOnlyContext(

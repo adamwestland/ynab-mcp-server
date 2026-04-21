@@ -48,12 +48,18 @@ export class AutoReduceOverfundedTool extends YnabTool {
         const protectedFloor = Math.max(0, carryover);
         const excess = c.balance - protectedFloor;
         if (excess <= 0) return null;
+        // Never drive `budgeted` below zero. A refund (positive activity)
+        // can push balance above budgeted; that surplus belongs to
+        // sweep_positives, not here. Clamp so standalone use is safe.
+        const newBudgeted = Math.max(0, c.budgeted - excess);
+        const actualDelta = newBudgeted - c.budgeted;
+        if (actualDelta === 0) return null;
         return {
           category_id: c.id,
           category_name: c.name,
           previous_budgeted: c.budgeted,
-          new_budgeted: c.budgeted - excess,
-          delta: -excess,
+          new_budgeted: newBudgeted,
+          delta: actualDelta,
         } as PlannedChange;
       })
       .filter((change): change is PlannedChange => change !== null);
