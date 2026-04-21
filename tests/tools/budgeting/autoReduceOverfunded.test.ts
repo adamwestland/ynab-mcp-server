@@ -75,8 +75,7 @@ describe('AutoReduceOverfundedTool', () => {
     const result = await tool.execute({ budget_id: 'b1', month: '2024-01-01', skip_closed_cc_categories: false });
 
     expect(client.updateCategoryBudget).not.toHaveBeenCalled();
-    expect(result.skipped.some(s => s.category_id === 'c-goal-fresh' && s.reason === 'goal')).toBe(true);
-    expect(result.skipped.some(s => s.category_id === 'c-goal-carry' && s.reason === 'goal')).toBe(true);
+    expect(result.skipped_by_reason.goal).toBe(2);
   });
 
   it('skips categories with non-positive balance (handled by other phases)', async () => {

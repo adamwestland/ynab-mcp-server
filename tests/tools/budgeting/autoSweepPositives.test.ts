@@ -54,7 +54,9 @@ describe('AutoSweepPositivesTool', () => {
     const result = await tool.execute({ budget_id: 'b1', month: '2024-01-01', skip_closed_cc_categories: false });
 
     expect(client.updateCategoryBudget).not.toHaveBeenCalled();
-    expect(result.skipped.some(s => s.category_id === 'c-save' && s.reason === 'goal_carryover')).toBe(true);
+    expect(result.skipped_by_reason.goal_carryover).toBe(1);
+    expect(result.skipped_count).toBe(1);
+    expect((result as any).skipped).toBeUndefined();
   });
 
   it('still sweeps a goal category with no prior carryover (pure in-month inflow)', async () => {

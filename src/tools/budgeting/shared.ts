@@ -77,9 +77,19 @@ export interface BudgetingResult {
   total_moved_milliunits: number;
   to_be_budgeted_before: { milliunits: number; formatted: string };
   to_be_budgeted_after: { milliunits: number; formatted: string } | null;
-  skipped: FilterResult['skipped'];
+  skipped_count: number;
+  skipped_by_reason: Record<string, number>;
   details: ApplyResult['details'];
   failed: ApplyResult['failed'];
+}
+
+export function summarizeSkipped(skipped: FilterResult['skipped']): {
+  skipped_count: number;
+  skipped_by_reason: Record<string, number>;
+} {
+  const by_reason: Record<string, number> = {};
+  for (const s of skipped) by_reason[s.reason] = (by_reason[s.reason] ?? 0) + 1;
+  return { skipped_count: skipped.length, skipped_by_reason: by_reason };
 }
 
 /** Re-fetch `to_be_budgeted` after applying so callers get an authoritative
