@@ -27,6 +27,9 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           track_progress: true
           display_report: true
+          # Allow GitHub Dependabot security/dependency PRs to receive automated review.
+          # Keep this narrow: do not use "*" unless we intentionally trust all bots.
+          allowed_bots: "dependabot"
           additional_permissions: |
             actions: read
           prompt: |
