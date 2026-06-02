@@ -8,11 +8,13 @@ import type { Config } from '../../src/config/index.js';
 
 // Mock the MCP SDK to avoid actual server startup
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
-  McpServer: vi.fn().mockImplementation(() => ({
-    registerTool: vi.fn(),
-    connect: vi.fn().mockResolvedValue(undefined),
-    close: vi.fn().mockResolvedValue(undefined),
-  })),
+  McpServer: vi.fn().mockImplementation(function () {
+    return {
+      registerTool: vi.fn(),
+      connect: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
