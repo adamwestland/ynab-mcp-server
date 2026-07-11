@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables. quiet keeps dotenv's banner off stdout, which
+// carries the MCP stdio protocol stream.
+dotenv.config({ quiet: true });
 
 const ConfigSchema = z.object({
   ynabApiToken: z.string().min(1, 'YNAB API token is required'),
