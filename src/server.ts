@@ -1,3 +1,5 @@
+import { Console } from 'node:console';
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
@@ -20,8 +22,12 @@ export class YnabMcpServer {
   private toolCount: number = 0;
 
   constructor(config: Config) {
-    // Initialize YNAB client
-    this.ynabClient = new YNABClient(config, console);
+    // Initialize YNAB client. The logger must write to stderr: stdout carries
+    // the MCP stdio protocol stream, and strict clients reject non-JSON lines.
+    this.ynabClient = new YNABClient(
+      config,
+      new Console({ stdout: process.stderr, stderr: process.stderr })
+    );
 
     // Initialize MCP server using the high-level McpServer API
     this.server = new McpServer({
