@@ -154,6 +154,7 @@ export interface YnabScheduledTransaction {
   completed_transactions: number;
   upcoming_transactions: YnabTransaction[] | null;
   subtransactions?: YnabScheduledSubTransaction[];
+  deleted?: boolean;
 }
 
 // API Response Types

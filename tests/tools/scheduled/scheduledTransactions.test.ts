@@ -2,7 +2,7 @@
  * Scheduled Transaction Tools Unit Tests
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { GetScheduledTransactionsTool } from '../../../src/tools/scheduled/getScheduledTransactions.js';
 import { GetScheduledTransactionTool } from '../../../src/tools/scheduled/getScheduledTransaction.js';
 import { CreateScheduledTransactionTool } from '../../../src/tools/scheduled/createScheduledTransaction.js';
@@ -10,6 +10,7 @@ import { UpdateScheduledTransactionTool } from '../../../src/tools/scheduled/upd
 import { DeleteScheduledTransactionTool } from '../../../src/tools/scheduled/deleteScheduledTransaction.js';
 import { createMockClient, type MockYNABClient } from '../../helpers/mockClient.js';
 import { createMockScheduledTransaction } from '../../helpers/fixtures.js';
+import { YNABError } from '../../../src/client/ErrorHandler.js';
 
 describe('GetScheduledTransactionsTool', () => {
   let client: MockYNABClient;
@@ -40,6 +41,28 @@ describe('GetScheduledTransactionsTool', () => {
     const result = await tool.execute({ budget_id: 'test-budget' });
 
     expect(result.scheduled_transactions).toHaveLength(2);
+  });
+
+  it('filters delta-response tombstones and reports their ids separately', async () => {
+    // Delta fetches (last_knowledge_of_server) include deleted schedules as
+    // tombstones with deleted: true — they must not be presented as live.
+    client.getScheduledTransactions.mockResolvedValue({
+      scheduled_transactions: [
+        createMockScheduledTransaction({ id: 'st-live', frequency: 'monthly' }),
+        createMockScheduledTransaction({ id: 'st-ghost', deleted: true }),
+      ],
+      server_knowledge: 2,
+    });
+
+    const result = await tool.execute({
+      budget_id: 'test-budget',
+      last_knowledge_of_server: 1,
+    });
+
+    expect(result.scheduled_transactions).toHaveLength(1);
+    expect(result.scheduled_transactions[0]!.id).toBe('st-live');
+    expect(result.total_count).toBe(1);
+    expect(result.deleted_scheduled_transaction_ids).toEqual(['st-ghost']);
   });
 
   it('handles API errors gracefully', async () => {
@@ -78,6 +101,23 @@ describe('GetScheduledTransactionTool', () => {
     // The tool returns with different structure than the mock
     expect(result.id).toBe('st-1');
     expect(result.frequency.type).toBe('monthly');
+    expect(result.deleted).toBe(false);
+  });
+
+  it('surfaces the deleted tombstone flag when fetched by a stale id', async () => {
+    // A caller may fetch an id captured before the schedule was removed; the
+    // tool must report deleted: true rather than present a ghost as live.
+    client.getScheduledTransaction.mockResolvedValue(
+      createMockScheduledTransaction({ id: 'st-ghost', deleted: true })
+    );
+
+    const result = await tool.execute({
+      budget_id: 'test-budget',
+      scheduled_transaction_id: 'st-ghost',
+    });
+
+    expect(result.id).toBe('st-ghost');
+    expect(result.deleted).toBe(true);
   });
 
   it('handles API errors gracefully', async () => {
@@ -240,7 +280,16 @@ describe('DeleteScheduledTransactionTool', () => {
     await expect(tool.execute({ budget_id: 'b' })).rejects.toThrow();
   });
 
-  it('deletes a scheduled transaction', async () => {
+  it('deletes a scheduled transaction and verifies it is gone', async () => {
+    // Pre-delete summary fetch returns the schedule; post-delete
+    // verification fetch 404s, proving the delete took effect.
+    client.getScheduledTransaction
+      .mockResolvedValueOnce(createMockScheduledTransaction({ id: 'st-1' }))
+      .mockRejectedValueOnce(new YNABError({
+        type: 'not_found',
+        message: 'Scheduled transaction not found',
+        statusCode: 404,
+      }));
     client.deleteScheduledTransaction.mockResolvedValue(undefined);
 
     const result = await tool.execute({
@@ -249,8 +298,99 @@ describe('DeleteScheduledTransactionTool', () => {
     });
 
     expect(client.deleteScheduledTransaction).toHaveBeenCalledWith('test-budget', 'st-1');
-    // The tool returns { deleted: true } on success
     expect(result.deleted).toBe(true);
+    expect(result.verified).toBe(true);
+  });
+
+  it('treats a post-delete tombstone as a verified delete', async () => {
+    client.getScheduledTransaction
+      .mockResolvedValueOnce(createMockScheduledTransaction({ id: 'st-1' }))
+      .mockResolvedValueOnce(createMockScheduledTransaction({ id: 'st-1', deleted: true }));
+    client.deleteScheduledTransaction.mockResolvedValue(undefined);
+
+    const result = await tool.execute({
+      budget_id: 'test-budget',
+      scheduled_transaction_id: 'st-1',
+    });
+
+    expect(result.deleted).toBe(true);
+    expect(result.verified).toBe(true);
+  });
+
+  it('reports deleted: false only after the schedule survives every retry', async () => {
+    // YNAB's DELETE is idempotent and can return 200 without removing the
+    // schedule; the tool must not report success when the schedule survives.
+    // It only concludes this after retrying, so a genuine no-op re-fetches the
+    // live schedule on every attempt.
+    vi.useFakeTimers();
+    try {
+      client.getScheduledTransaction.mockResolvedValue(
+        createMockScheduledTransaction({ id: 'st-1', deleted: false })
+      );
+      client.deleteScheduledTransaction.mockResolvedValue(undefined);
+
+      const promise = tool.execute({
+        budget_id: 'test-budget',
+        scheduled_transaction_id: 'st-1',
+      });
+      await vi.runAllTimersAsync();
+      const result = await promise;
+
+      expect(result.deleted).toBe(false);
+      expect(result.verified).toBe(true);
+      expect(result.warning).toMatch(/still exists/);
+      // 1 pre-delete summary fetch + 3 verification attempts.
+      expect(client.getScheduledTransaction).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('recovers from read-after-write lag: retries until the delete is confirmed', async () => {
+    // The first verification fetch still shows the schedule (read side lagging
+    // the just-issued delete); a retry then sees the tombstone. This must be
+    // reported as a successful delete, not a silently-ignored one.
+    vi.useFakeTimers();
+    try {
+      client.getScheduledTransaction
+        .mockResolvedValueOnce(createMockScheduledTransaction({ id: 'st-1' })) // pre-delete summary
+        .mockResolvedValueOnce(createMockScheduledTransaction({ id: 'st-1', deleted: false })) // verify #1: lag
+        .mockResolvedValueOnce(createMockScheduledTransaction({ id: 'st-1', deleted: true })); // verify #2: gone
+      client.deleteScheduledTransaction.mockResolvedValue(undefined);
+
+      const promise = tool.execute({
+        budget_id: 'test-budget',
+        scheduled_transaction_id: 'st-1',
+      });
+      await vi.runAllTimersAsync();
+      const result = await promise;
+
+      expect(result.deleted).toBe(true);
+      expect(result.verified).toBe(true);
+      expect(result.warning).toMatch(/permanently deleted/);
+      expect(client.getScheduledTransaction).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports deleted but unverified when the verification fetch fails', async () => {
+    client.getScheduledTransaction
+      .mockResolvedValueOnce(createMockScheduledTransaction({ id: 'st-1' }))
+      .mockRejectedValueOnce(new YNABError({
+        type: 'network_error',
+        message: 'Network error',
+      }));
+    client.deleteScheduledTransaction.mockResolvedValue(undefined);
+
+    const result = await tool.execute({
+      budget_id: 'test-budget',
+      scheduled_transaction_id: 'st-1',
+    });
+
+    expect(result.deleted).toBe(true);
+    expect(result.verified).toBe(false);
+    expect(result.warning).toMatch(/could not be verified/);
   });
 
   it('handles API errors gracefully', async () => {

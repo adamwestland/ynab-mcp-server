@@ -96,6 +96,7 @@ export class GetScheduledTransactionsTool extends YnabTool {
         } | null;
       }>;
     }>;
+    deleted_scheduled_transaction_ids: string[];
     server_knowledge: number;
     total_count: number;
   }> {
@@ -107,8 +108,19 @@ export class GetScheduledTransactionsTool extends YnabTool {
         input.last_knowledge_of_server
       );
 
+      // Delta responses (last_knowledge_of_server) include tombstones for
+      // schedules deleted since that server knowledge. Presenting those as
+      // live schedules invites callers to act on ghosts (e.g. "deleting" an
+      // already-deleted schedule, which YNAB confirms with 200), so filter
+      // them out and surface their ids separately.
+      const deletedScheduledTransactionIds = scheduledTransactionsResponse.scheduled_transactions
+        .filter(scheduledTransaction => scheduledTransaction.deleted)
+        .map(scheduledTransaction => scheduledTransaction.id);
+      const liveScheduledTransactions = scheduledTransactionsResponse.scheduled_transactions
+        .filter(scheduledTransaction => !scheduledTransaction.deleted);
+
       // Process and format scheduled transaction data
-      const processedScheduledTransactions = scheduledTransactionsResponse.scheduled_transactions.map(scheduledTransaction => {
+      const processedScheduledTransactions = liveScheduledTransactions.map(scheduledTransaction => {
         const baseScheduledTransaction = {
           id: scheduledTransaction.id,
           date_first: scheduledTransaction.date_first,
@@ -198,6 +210,7 @@ export class GetScheduledTransactionsTool extends YnabTool {
 
       return {
         scheduled_transactions: sortedScheduledTransactions,
+        deleted_scheduled_transaction_ids: deletedScheduledTransactionIds,
         server_knowledge: scheduledTransactionsResponse.server_knowledge,
         total_count: sortedScheduledTransactions.length,
       };
