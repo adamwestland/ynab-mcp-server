@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { YnabTool } from '../base.js';
+import { YNABError } from '../../client/ErrorHandler.js';
 
 /**
  * Input schema for the delete scheduled transaction tool
@@ -13,16 +14,19 @@ type DeleteScheduledTransactionInput = z.infer<typeof DeleteScheduledTransaction
 
 /**
  * Tool for deleting a scheduled transaction
- * 
+ *
  * This tool permanently removes a scheduled transaction from the budget:
  * - Stops all future occurrences of the transaction
  * - Does not affect any transactions that have already been created from this schedule
  * - Cannot be undone - the scheduled transaction must be recreated if needed
  * - Provides confirmation of deletion with summary of what was removed
+ * - Re-fetches the schedule after deleting to verify the delete took effect:
+ *   YNAB's DELETE endpoint is idempotent and returns 200 even when nothing
+ *   was removed, so the HTTP status alone is not a trustworthy success signal
  */
 export class DeleteScheduledTransactionTool extends YnabTool {
   name = 'ynab_delete_scheduled_transaction';
-  description = 'Permanently delete a scheduled transaction. This stops all future occurrences but does not affect already created transactions. Cannot be undone.';
+  description = 'Permanently delete a scheduled transaction. This stops all future occurrences but does not affect already created transactions. Cannot be undone. Verifies the deletion took effect and reports deleted: false if YNAB silently ignored the request.';
   inputSchema = DeleteScheduledTransactionInputSchema;
 
   /**
@@ -33,6 +37,7 @@ export class DeleteScheduledTransactionTool extends YnabTool {
    */
   async execute(args: unknown): Promise<{
     deleted: boolean;
+    verified: boolean;
     scheduled_transaction_id: string;
     summary: {
       frequency: string;
@@ -81,9 +86,47 @@ export class DeleteScheduledTransactionTool extends YnabTool {
         input.scheduled_transaction_id
       );
 
+      // YNAB's DELETE is idempotent: it returns 200 with the entity in the
+      // body even when nothing was actually removed (observed in production
+      // where a live schedule survived two consecutive 200 responses). A
+      // follow-up GET is the only reliable signal: 404 or a tombstone means
+      // the schedule is gone; a live entity means YNAB ignored the delete.
+      let verified = false;
+      let stillExists = false;
+      try {
+        const afterDelete = await this.client.getScheduledTransaction(
+          input.budget_id,
+          input.scheduled_transaction_id
+        );
+        if (afterDelete.deleted) {
+          verified = true;
+        } else {
+          stillExists = true;
+        }
+      } catch (verifyError) {
+        if (verifyError instanceof YNABError && verifyError.type === 'not_found') {
+          verified = true;
+        }
+        // Any other verification failure (network, rate limit): the DELETE
+        // itself returned success, so report deleted but unverified rather
+        // than failing the whole operation.
+      }
+
+      if (stillExists) {
+        return {
+          deleted: false,
+          verified: true,
+          scheduled_transaction_id: input.scheduled_transaction_id,
+          summary: transactionSummary,
+          warning: 'YNAB returned success for the delete request, but the scheduled transaction still exists. The API silently ignored the request. Retry the deletion, or delete the schedule in the YNAB app, then confirm with a full (non-delta) ynab_get_scheduled_transactions fetch.',
+        };
+      }
+
       // Generate appropriate warning message
-      let warningMessage = 'This scheduled transaction has been permanently deleted and cannot be recovered.';
-      
+      let warningMessage = verified
+        ? 'This scheduled transaction has been permanently deleted and cannot be recovered.'
+        : 'The delete request succeeded but the deletion could not be verified (the confirmation fetch failed). Confirm with a full (non-delta) ynab_get_scheduled_transactions fetch.';
+
       if (scheduledTransaction.date_next && new Date(scheduledTransaction.date_next) > new Date()) {
         warningMessage += ` Future transactions scheduled for ${this.formatDate(scheduledTransaction.date_next)} and beyond will no longer be created.`;
       }
@@ -94,6 +137,7 @@ export class DeleteScheduledTransactionTool extends YnabTool {
 
       return {
         deleted: true,
+        verified,
         scheduled_transaction_id: input.scheduled_transaction_id,
         summary: transactionSummary,
         warning: warningMessage,
