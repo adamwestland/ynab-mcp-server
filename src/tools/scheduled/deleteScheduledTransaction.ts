@@ -13,6 +13,18 @@ const DeleteScheduledTransactionInputSchema = z.object({
 type DeleteScheduledTransactionInput = z.infer<typeof DeleteScheduledTransactionInputSchema>;
 
 /**
+ * How many times to re-check the schedule after a DELETE before concluding
+ * YNAB silently ignored the request. A freshly-issued delete can briefly lag
+ * before the read side reflects it, so a single immediate re-fetch could
+ * report a successful delete as ignored — which would wrongly tell the user to
+ * retry a destructive operation that already worked.
+ */
+const VERIFY_MAX_ATTEMPTS = 3;
+
+/** Base backoff between verification re-checks; grows linearly per attempt. */
+const VERIFY_BACKOFF_MS = 300;
+
+/**
  * Tool for deleting a scheduled transaction
  *
  * This tool permanently removes a scheduled transaction from the budget:
@@ -28,6 +40,11 @@ export class DeleteScheduledTransactionTool extends YnabTool {
   name = 'ynab_delete_scheduled_transaction';
   description = 'Permanently delete a scheduled transaction. This stops all future occurrences but does not affect already created transactions. Cannot be undone. Verifies the deletion took effect and reports deleted: false if YNAB silently ignored the request.';
   inputSchema = DeleteScheduledTransactionInputSchema;
+
+  /** Resolve after `ms` milliseconds (used to space out verification re-checks). */
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
 
   /**
    * Execute the delete scheduled transaction tool
@@ -91,36 +108,48 @@ export class DeleteScheduledTransactionTool extends YnabTool {
       // where a live schedule survived two consecutive 200 responses). A
       // follow-up GET is the only reliable signal: 404 or a tombstone means
       // the schedule is gone; a live entity means YNAB ignored the delete.
-      let verified = false;
-      let stillExists = false;
-      try {
-        const afterDelete = await this.client.getScheduledTransaction(
-          input.budget_id,
-          input.scheduled_transaction_id
-        );
-        if (afterDelete.deleted) {
-          verified = true;
-        } else {
-          stillExists = true;
+      // Because the read side can briefly lag a just-issued delete, re-check a
+      // few times with a short backoff before concluding it was ignored — a
+      // single immediate fetch could flag a successful delete as a no-op and
+      // wrongly prompt the user to retry a destructive operation.
+      let verifyOutcome: 'gone' | 'exists' | 'unverified' = 'unverified';
+      for (let attempt = 1; attempt <= VERIFY_MAX_ATTEMPTS; attempt++) {
+        try {
+          const afterDelete = await this.client.getScheduledTransaction(
+            input.budget_id,
+            input.scheduled_transaction_id
+          );
+          verifyOutcome = afterDelete.deleted ? 'gone' : 'exists';
+        } catch (verifyError) {
+          // 404 confirms the delete. Any other failure (network, rate limit)
+          // leaves it unverified: the DELETE itself returned success, so report
+          // deleted-but-unverified rather than failing the whole operation.
+          verifyOutcome =
+            verifyError instanceof YNABError && verifyError.type === 'not_found'
+              ? 'gone'
+              : 'unverified';
+          break;
         }
-      } catch (verifyError) {
-        if (verifyError instanceof YNABError && verifyError.type === 'not_found') {
-          verified = true;
+        if (verifyOutcome === 'gone') {
+          break;
         }
-        // Any other verification failure (network, rate limit): the DELETE
-        // itself returned success, so report deleted but unverified rather
-        // than failing the whole operation.
+        // Still present — could be read-after-write lag; wait and re-check.
+        if (attempt < VERIFY_MAX_ATTEMPTS) {
+          await this.delay(VERIFY_BACKOFF_MS * attempt);
+        }
       }
 
-      if (stillExists) {
+      if (verifyOutcome === 'exists') {
         return {
           deleted: false,
           verified: true,
           scheduled_transaction_id: input.scheduled_transaction_id,
           summary: transactionSummary,
-          warning: 'YNAB returned success for the delete request, but the scheduled transaction still exists. The API silently ignored the request. Retry the deletion, or delete the schedule in the YNAB app, then confirm with a full (non-delta) ynab_get_scheduled_transactions fetch.',
+          warning: `YNAB returned success for the delete request, but the scheduled transaction still exists after ${VERIFY_MAX_ATTEMPTS} verification checks. The API silently ignored the request. Retry the deletion, or delete the schedule in the YNAB app, then confirm with a full (non-delta) ynab_get_scheduled_transactions fetch.`,
         };
       }
+
+      const verified = verifyOutcome === 'gone';
 
       // Generate appropriate warning message
       let warningMessage = verified

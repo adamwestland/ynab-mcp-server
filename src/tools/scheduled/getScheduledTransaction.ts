@@ -22,6 +22,9 @@ type GetScheduledTransactionInput = z.infer<typeof GetScheduledTransactionInputS
  * - Subtransactions for split scheduled transactions
  * - Upcoming transaction previews
  * - Flag and status information
+ * - A `deleted` tombstone flag: YNAB can return a deleted schedule (e.g. when
+ *   fetched by an id captured before it was removed), and surfacing this stops
+ *   callers from treating a ghost as a live schedule.
  */
 export class GetScheduledTransactionTool extends YnabTool {
   name = 'ynab_get_scheduled_transaction';
@@ -36,6 +39,7 @@ export class GetScheduledTransactionTool extends YnabTool {
    */
   async execute(args: unknown): Promise<{
     id: string;
+    deleted: boolean;
     date_first: string;
     frequency: {
       type: string;
@@ -124,6 +128,7 @@ export class GetScheduledTransactionTool extends YnabTool {
 
       const result = {
         id: scheduledTransaction.id,
+        deleted: scheduledTransaction.deleted ?? false,
         date_first: scheduledTransaction.date_first,
         frequency: {
           type: scheduledTransaction.frequency,
