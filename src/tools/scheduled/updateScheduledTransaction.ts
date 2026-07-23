@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { YnabTool } from '../base.js';
-import type { YnabScheduledTransactionResponse, UpdateScheduledTransaction } from '../../types/index.js';
+import type { YnabScheduledTransactionResponse, UpdateScheduledTransaction, FlagColor } from '../../types/index.js';
 
 /**
  * Input schema for the update scheduled transaction tool
@@ -102,9 +102,12 @@ export class UpdateScheduledTransactionTool extends YnabTool {
     const input = this.validateArgs<UpdateScheduledTransactionInput>(args);
 
     try {
-      // Get current scheduled transaction to preserve existing values
-      // Note: This would be used to preserve existing values in a more complete implementation
-      await this.client.getScheduledTransaction(
+      // Fetch the current scheduled transaction so the update sends a COMPLETE
+      // object. YNAB's scheduled-transaction update requires the core fields
+      // (account_id, date, amount, frequency) to be present; sending only the
+      // changed field is rejected as "Bad request - invalid parameters". This is
+      // the fetch-and-merge the previous implementation only promised in a comment.
+      const current = await this.client.getScheduledTransaction(
         input.budget_id,
         input.scheduled_transaction_id
       );
@@ -126,8 +129,19 @@ export class UpdateScheduledTransactionTool extends YnabTool {
         throw new Error('Cannot specify both payee_id and transfer_account_id. Use transfer_account_id for transfers.');
       }
 
-      // Prepare update data with only changed fields
-      const updateData: UpdateScheduledTransaction = {};
+      // Seed the payload with the existing values so unspecified fields are
+      // preserved and the required fields are always present, then overlay the
+      // caller's changes below.
+      const updateData: UpdateScheduledTransaction = {
+        account_id: current.account_id,
+        // YNAB request body uses `date`; the response object exposes `date_first`.
+        date: current.date_first,
+        amount: current.amount,
+        frequency: current.frequency,
+        memo: current.memo,
+        flag_color: current.flag_color as FlagColor,
+      };
+      // (payee / transfer / category are resolved together further below)
 
       // Update basic fields if provided
       if (input.account_id !== undefined) {
@@ -155,23 +169,43 @@ export class UpdateScheduledTransactionTool extends YnabTool {
         changesApplied.push(input.memo ? 'Updated memo' : 'Cleared memo');
       }
 
-      // Handle payee/transfer logic
-      if (input.transfer_account_id !== undefined) {
-        updateData.transfer_account_id = input.transfer_account_id;
-        // Clear payee if setting transfer
-        updateData.payee_id = null;
-        changesApplied.push('Updated to transfer');
-      } else if (input.payee_id !== undefined) {
-        updateData.payee_id = input.payee_id;
-        // Clear transfer if setting payee
-        updateData.transfer_account_id = null;
-        changesApplied.push('Updated payee');
-      }
+      // Resolve payee / transfer / category together. A scheduled transaction is
+      // EITHER a transfer OR a categorized payee transaction — never both. Decide
+      // the final transfer state from the caller's intent (falling back to the
+      // existing txn), then set all three fields explicitly so the payload is never
+      // self-contradictory — e.g. a stray category_id passed for a schedule that is
+      // already a transfer must not be sent alongside transfer_account_id.
+      // Explicit nulls (not omitted keys) so an absent-field-is-unchanged server
+      // actually clears the unused side.
+      const willBeTransfer =
+        input.transfer_account_id !== undefined
+          ? input.transfer_account_id !== null
+          : input.payee_id !== undefined
+            ? false
+            : Boolean(current.transfer_account_id);
 
-      // Update category (not applicable for transfers)
-      if (input.category_id !== undefined && !input.transfer_account_id) {
-        updateData.category_id = input.category_id;
-        changesApplied.push('Updated category');
+      if (willBeTransfer) {
+        updateData.transfer_account_id =
+          input.transfer_account_id !== undefined
+            ? input.transfer_account_id
+            : current.transfer_account_id;
+        updateData.payee_id = null;
+        updateData.category_id = null;
+        if (input.transfer_account_id !== undefined) {
+          changesApplied.push('Updated to transfer');
+        }
+      } else {
+        updateData.transfer_account_id = null;
+        updateData.payee_id =
+          input.payee_id !== undefined ? input.payee_id : current.payee_id;
+        updateData.category_id =
+          input.category_id !== undefined ? input.category_id : current.category_id;
+        if (input.payee_id !== undefined) {
+          changesApplied.push('Updated payee');
+        }
+        if (input.category_id !== undefined) {
+          changesApplied.push('Updated category');
+        }
       }
 
       // Handle flag updates
