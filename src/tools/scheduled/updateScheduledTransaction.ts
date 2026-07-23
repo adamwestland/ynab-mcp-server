@@ -177,9 +177,12 @@ export class UpdateScheduledTransactionTool extends YnabTool {
       // Handle payee/transfer logic
       if (input.transfer_account_id !== undefined) {
         updateData.transfer_account_id = input.transfer_account_id;
-        // Clear payee/category if setting transfer (transfers carry neither)
+        // Clear payee/category if setting transfer (transfers carry neither).
+        // Send explicit nulls, not omitted keys: the whole premise of this merge
+        // is that an absent field is treated as "leave unchanged", so a `delete`
+        // here would leave the old category on YNAB's side.
         updateData.payee_id = null;
-        delete updateData.category_id;
+        updateData.category_id = null;
         changesApplied.push('Updated to transfer');
       } else if (input.payee_id !== undefined) {
         updateData.payee_id = input.payee_id;

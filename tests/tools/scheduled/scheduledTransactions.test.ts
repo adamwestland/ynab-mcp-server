@@ -266,6 +266,61 @@ describe('UpdateScheduledTransactionTool', () => {
     expect(payload.frequency).toBe('monthly');
   });
 
+  it('preserves the other seeded fields on a memo-only update', async () => {
+    const existing = createMockScheduledTransaction({
+      id: 'st-1',
+      account_id: 'acct-9',
+      date_first: '2026-08-08',
+      amount: -13520,
+      frequency: 'monthly',
+      payee_id: 'payee-1',
+      category_id: 'cat-1',
+      memo: 'old memo',
+      transfer_account_id: null,
+    });
+    client.getScheduledTransaction.mockResolvedValue(existing);
+    client.updateScheduledTransaction.mockResolvedValue({ scheduled_transaction: existing });
+
+    await tool.execute({
+      budget_id: 'test-budget',
+      scheduled_transaction_id: 'st-1',
+      memo: 'new memo', // only the memo changes
+    });
+
+    const [, , payload] = client.updateScheduledTransaction.mock.calls[0];
+    expect(payload.memo).toBe('new memo');
+    // everything else carried over from the existing transaction:
+    expect(payload.account_id).toBe('acct-9');
+    expect(payload.amount).toBe(-13520);
+    expect(payload.frequency).toBe('monthly');
+    expect(payload.category_id).toBe('cat-1');
+    expect(payload.payee_id).toBe('payee-1');
+  });
+
+  it('clears category_id and payee_id (explicit null) when converting to a transfer', async () => {
+    const existing = createMockScheduledTransaction({
+      id: 'st-1',
+      payee_id: 'payee-1',
+      category_id: 'cat-1',
+      transfer_account_id: null,
+    });
+    client.getScheduledTransaction.mockResolvedValue(existing);
+    client.updateScheduledTransaction.mockResolvedValue({ scheduled_transaction: existing });
+
+    await tool.execute({
+      budget_id: 'test-budget',
+      scheduled_transaction_id: 'st-1',
+      transfer_account_id: 'acct-dest',
+    });
+
+    const [, , payload] = client.updateScheduledTransaction.mock.calls[0];
+    expect(payload.transfer_account_id).toBe('acct-dest');
+    // explicit nulls so the server actually clears them (not omitted keys):
+    expect(payload.payee_id).toBeNull();
+    expect(payload.category_id).toBeNull();
+    expect('category_id' in payload).toBe(true);
+  });
+
   it('sends "date" (not "date_first") to the YNAB API when updating date', async () => {
     // Same as create: PATCH body must use `date`, not `date_first`.
     const mockStx = createMockScheduledTransaction({ id: 'st-1' });
