@@ -234,6 +234,38 @@ describe('UpdateScheduledTransactionTool', () => {
     expect(result.scheduled_transaction.amount.milliunits).toBe(-75000);
   });
 
+  it('merges existing fields so a single-field update sends a complete object', async () => {
+    // Regression: YNAB's scheduled-transaction update requires the core fields
+    // (account_id, date, amount, frequency). Previously the tool sent only the
+    // changed field, so a category-only edit was rejected as "invalid parameters".
+    const existing = createMockScheduledTransaction({
+      id: 'st-1',
+      account_id: 'acct-9',
+      date_first: '2026-08-08',
+      amount: -13520,
+      frequency: 'monthly',
+      payee_id: 'payee-1',
+      category_id: 'old-cat',
+      transfer_account_id: null,
+    });
+    client.getScheduledTransaction.mockResolvedValue(existing);
+    client.updateScheduledTransaction.mockResolvedValue({ scheduled_transaction: existing });
+
+    await tool.execute({
+      budget_id: 'test-budget',
+      scheduled_transaction_id: 'st-1',
+      category_id: 'new-cat', // the ONLY field the caller changes
+    });
+
+    const [, , payload] = client.updateScheduledTransaction.mock.calls[0];
+    expect(payload.category_id).toBe('new-cat');
+    // required fields carried over from the existing transaction:
+    expect(payload.account_id).toBe('acct-9');
+    expect(payload.date).toBe('2026-08-08'); // mapped from date_first
+    expect(payload.amount).toBe(-13520);
+    expect(payload.frequency).toBe('monthly');
+  });
+
   it('sends "date" (not "date_first") to the YNAB API when updating date', async () => {
     // Same as create: PATCH body must use `date`, not `date_first`.
     const mockStx = createMockScheduledTransaction({ id: 'st-1' });
