@@ -134,8 +134,13 @@ export class UpdateScheduledTransactionTool extends YnabTool {
       // caller's changes below.
       const updateData: UpdateScheduledTransaction = {
         account_id: current.account_id,
-        // YNAB request body uses `date`; the response object exposes `date_first`.
-        date: current.date_first,
+        // YNAB's update body uses `date` (the response exposes `date_first`/`date_next`)
+        // and rejects a date "more than 1 week in the past or over 5 years in the
+        // future". `date_first` is the ORIGINAL start date, which is far in the past
+        // for any long-running schedule — sending it 400s. Send `date_next` (the next
+        // occurrence, always in the valid window); fall back to date_first only if the
+        // schedule has no next occurrence.
+        date: current.date_next ?? current.date_first,
         amount: current.amount,
         frequency: current.frequency,
         memo: current.memo,

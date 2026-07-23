@@ -241,7 +241,8 @@ describe('UpdateScheduledTransactionTool', () => {
     const existing = createMockScheduledTransaction({
       id: 'st-1',
       account_id: 'acct-9',
-      date_first: '2026-08-08',
+      date_first: '2025-09-08', // ORIGINAL start — far in the past; YNAB rejects this
+      date_next: '2026-08-08', // the upcoming occurrence — the value that's valid
       amount: -13520,
       frequency: 'monthly',
       payee_id: 'payee-1',
@@ -261,7 +262,10 @@ describe('UpdateScheduledTransactionTool', () => {
     expect(payload.category_id).toBe('new-cat');
     // required fields carried over from the existing transaction:
     expect(payload.account_id).toBe('acct-9');
-    expect(payload.date).toBe('2026-08-08'); // mapped from date_first
+    // `date` must use date_next, NOT the far-past date_first — YNAB rejects a date
+    // "more than 1 week in the past" (the real 400 that a category-only update hit):
+    expect(payload.date).toBe('2026-08-08');
+    expect(payload.date).not.toBe('2025-09-08');
     expect(payload.amount).toBe(-13520);
     expect(payload.frequency).toBe('monthly');
   });
