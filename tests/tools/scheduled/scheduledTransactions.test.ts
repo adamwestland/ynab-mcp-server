@@ -321,6 +321,31 @@ describe('UpdateScheduledTransactionTool', () => {
     expect('category_id' in payload).toBe(true);
   });
 
+  it('never sends category_id alongside transfer_account_id for an already-transfer schedule', async () => {
+    const existing = createMockScheduledTransaction({
+      id: 'st-1',
+      payee_id: null,
+      category_id: null,
+      transfer_account_id: 'acct-dest',
+    });
+    client.getScheduledTransaction.mockResolvedValue(existing);
+    client.updateScheduledTransaction.mockResolvedValue({ scheduled_transaction: existing });
+
+    // caller updates the amount but also (mistakenly) passes a category on a transfer
+    await tool.execute({
+      budget_id: 'test-budget',
+      scheduled_transaction_id: 'st-1',
+      amount: -5000,
+      category_id: 'cat-should-be-ignored',
+    });
+
+    const [, , payload] = client.updateScheduledTransaction.mock.calls[0];
+    expect(payload.transfer_account_id).toBe('acct-dest'); // stays a transfer
+    expect(payload.amount).toBe(-5000);
+    expect(payload.category_id).toBeNull(); // the stray category is not sent
+    expect(payload.payee_id).toBeNull();
+  });
+
   it('sends "date" (not "date_first") to the YNAB API when updating date', async () => {
     // Same as create: PATCH body must use `date`, not `date_first`.
     const mockStx = createMockScheduledTransaction({ id: 'st-1' });

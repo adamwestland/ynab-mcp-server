@@ -141,12 +141,7 @@ export class UpdateScheduledTransactionTool extends YnabTool {
         memo: current.memo,
         flag_color: current.flag_color as FlagColor,
       };
-      if (current.transfer_account_id) {
-        updateData.transfer_account_id = current.transfer_account_id;
-      } else {
-        updateData.payee_id = current.payee_id;
-        updateData.category_id = current.category_id;
-      }
+      // (payee / transfer / category are resolved together further below)
 
       // Update basic fields if provided
       if (input.account_id !== undefined) {
@@ -174,27 +169,43 @@ export class UpdateScheduledTransactionTool extends YnabTool {
         changesApplied.push(input.memo ? 'Updated memo' : 'Cleared memo');
       }
 
-      // Handle payee/transfer logic
-      if (input.transfer_account_id !== undefined) {
-        updateData.transfer_account_id = input.transfer_account_id;
-        // Clear payee/category if setting transfer (transfers carry neither).
-        // Send explicit nulls, not omitted keys: the whole premise of this merge
-        // is that an absent field is treated as "leave unchanged", so a `delete`
-        // here would leave the old category on YNAB's side.
+      // Resolve payee / transfer / category together. A scheduled transaction is
+      // EITHER a transfer OR a categorized payee transaction — never both. Decide
+      // the final transfer state from the caller's intent (falling back to the
+      // existing txn), then set all three fields explicitly so the payload is never
+      // self-contradictory — e.g. a stray category_id passed for a schedule that is
+      // already a transfer must not be sent alongside transfer_account_id.
+      // Explicit nulls (not omitted keys) so an absent-field-is-unchanged server
+      // actually clears the unused side.
+      const willBeTransfer =
+        input.transfer_account_id !== undefined
+          ? input.transfer_account_id !== null
+          : input.payee_id !== undefined
+            ? false
+            : Boolean(current.transfer_account_id);
+
+      if (willBeTransfer) {
+        updateData.transfer_account_id =
+          input.transfer_account_id !== undefined
+            ? input.transfer_account_id
+            : current.transfer_account_id;
         updateData.payee_id = null;
         updateData.category_id = null;
-        changesApplied.push('Updated to transfer');
-      } else if (input.payee_id !== undefined) {
-        updateData.payee_id = input.payee_id;
-        // Clear transfer if setting payee
+        if (input.transfer_account_id !== undefined) {
+          changesApplied.push('Updated to transfer');
+        }
+      } else {
         updateData.transfer_account_id = null;
-        changesApplied.push('Updated payee');
-      }
-
-      // Update category (not applicable for transfers)
-      if (input.category_id !== undefined && !input.transfer_account_id) {
-        updateData.category_id = input.category_id;
-        changesApplied.push('Updated category');
+        updateData.payee_id =
+          input.payee_id !== undefined ? input.payee_id : current.payee_id;
+        updateData.category_id =
+          input.category_id !== undefined ? input.category_id : current.category_id;
+        if (input.payee_id !== undefined) {
+          changesApplied.push('Updated payee');
+        }
+        if (input.category_id !== undefined) {
+          changesApplied.push('Updated category');
+        }
       }
 
       // Handle flag updates
