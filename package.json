@@ -54,7 +54,7 @@
     "url": "https://github.com/adamwestland/ynab-mcp-server/issues"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "files": [
     "dist",
