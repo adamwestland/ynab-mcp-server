@@ -463,6 +463,23 @@ describe('GetBudgetMonthTool', () => {
       expect(JSON.parse(readFileSync(target, 'utf-8')).month.month).toBe('2024-01-01');
     });
 
+    it('rejects an output_path outside the allowed directories before calling the API', async () => {
+      primeMonth();
+      const saved = process.env.YNAB_OUTPUT_DIR;
+      process.env.YNAB_OUTPUT_DIR = dir;
+      try {
+        await expect(tool.execute({
+          budget_id: 'test-budget',
+          month: '2024-01-01',
+          output_path: join(dir, '..', 'escape.json'),
+        })).rejects.toThrow(/outside the allowed output directories/);
+        expect(client.getBudgetMonth).not.toHaveBeenCalled();
+      } finally {
+        if (saved === undefined) delete process.env.YNAB_OUTPUT_DIR;
+        else process.env.YNAB_OUTPUT_DIR = saved;
+      }
+    });
+
     it('rejects an empty output_path', async () => {
       primeMonth();
       await expect(tool.execute({ budget_id: 'test-budget', month: '2024-01-01', output_path: '' })).rejects.toThrow();

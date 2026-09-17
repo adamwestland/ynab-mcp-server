@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { YnabTool } from '../base.js';
-import { writeJsonFile } from '../../utils/fileOutput.js';
+import { resolveOutputPath, writeJsonFile } from '../../utils/fileOutput.js';
 import type { YnabBudgetMonthResponse, YnabCategory } from '../../types/index.js';
 
 const CategoryFilterSchema = z.enum(['active', 'with_activity', 'with_balance', 'all']);
@@ -13,7 +13,8 @@ const GetBudgetMonthInputSchema = z.object({
     'Which categories to include. "active" (default): budgeted/activity/balance non-zero. "with_activity": activity non-zero. "with_balance": balance non-zero. "all": every non-deleted category (including zero-balance). Deleted categories and goal metadata are always omitted.'
   ),
   output_path: z.string().min(1).optional().describe(
-    'If provided, write the full JSON result (same shape as the normal response) to this absolute file path and return a short summary instead of the data. Use when the response would be too large for the client to accept in one tool result, e.g. category_filter="all" on a large budget.'
+    'If provided, write the full JSON result (same shape as the normal response) to this absolute file path and return a short summary instead of the data. Use when the response would be too large for the client to accept in one tool result, e.g. category_filter="all" on a large budget.' +
+    'Must resolve inside an allowed directory (YNAB_OUTPUT_DIR, path-delimited list; default: the server working directory and the OS temp dir); anything else is rejected before any data is fetched.'
   ),
 });
 
@@ -79,6 +80,8 @@ export class GetBudgetMonthTool extends YnabTool {
 
   async execute(args: unknown): Promise<{ month: ProcessedMonth; server_knowledge: number } | BudgetMonthFileSummary> {
     const input = this.validateArgs<GetBudgetMonthInput>(args);
+    // Fail on a disallowed path before spending API calls.
+    if (input.output_path) resolveOutputPath(input.output_path);
 
     try {
       const budgetMonthResponse: YnabBudgetMonthResponse = await this.client.getBudgetMonth(

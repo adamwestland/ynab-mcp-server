@@ -155,7 +155,8 @@ await tools.ynab_get_transactions({
 });
 
 // Large read? Write the JSON to disk and get a short summary back instead
-// (same shape as the inline response; parents are created; path must be absolute)
+// (same shape as the inline response; parents are created; path must be absolute
+// and inside YNAB_OUTPUT_DIR — default: the server's cwd or the OS temp dir)
 await tools.ynab_get_transactions({
   budget_id: "your-budget-id",
   since_date: "2024-01-01",

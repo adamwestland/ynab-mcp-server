@@ -627,6 +627,19 @@ describe('GetTransactionsTool', () => {
       expect(JSON.parse(readFileSync(target, 'utf-8')).transactions).toHaveLength(2);
     });
 
+    it('rejects an output_path outside the allowed directories before calling the API', async () => {
+      const saved = process.env.YNAB_OUTPUT_DIR;
+      process.env.YNAB_OUTPUT_DIR = dir;
+      try {
+        await expect(tool.execute({ budget_id: 'test-budget', output_path: '/etc/ynab-snapshot.json' }))
+          .rejects.toThrow(/outside the allowed output directories/);
+        expect(client.getTransactions).not.toHaveBeenCalled();
+      } finally {
+        if (saved === undefined) delete process.env.YNAB_OUTPUT_DIR;
+        else process.env.YNAB_OUTPUT_DIR = saved;
+      }
+    });
+
     it('returns inline data when output_path is omitted', async () => {
       const result = await tool.execute({ budget_id: 'test-budget' });
       expect((result as any).path).toBeUndefined();

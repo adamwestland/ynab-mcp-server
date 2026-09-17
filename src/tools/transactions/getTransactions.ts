@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { YnabTool } from '../base.js';
-import { writeJsonFile } from '../../utils/fileOutput.js';
+import { resolveOutputPath, writeJsonFile } from '../../utils/fileOutput.js';
 import type { YnabTransactionsResponse } from '../../types/index.js';
 
 /**
@@ -29,7 +29,7 @@ const GetTransactionsInputSchema = z.object({
   limit: z.number().int().min(1).max(1000).optional().describe('Maximum number of transactions to return (max 1000)'),
   compact: z.boolean().optional().default(false).describe('When true, returns minimal fields: id, date, amount, memo, payee, category, account, cleared, approved. Reduces response size.'),
   fields: z.array(z.enum(VALID_FIELDS)).min(1).optional().describe('Explicit list of fields to include per transaction. Takes precedence over compact. Reduces response size for large result sets.'),
-  output_path: z.string().min(1).optional().describe('If provided, write the full JSON result (same shape as the normal response, after any compact/fields projection) to this absolute file path and return a short summary instead of the transactions. Use for large result sets such as a multi-month snapshot that the client would otherwise truncate.'),
+  output_path: z.string().min(1).optional().describe('If provided, write the full JSON result (same shape as the normal response, after any compact/fields projection) to this absolute file path and return a short summary instead of the transactions. Use for large result sets such as a multi-month snapshot that the client would otherwise truncate. Must resolve inside an allowed directory (YNAB_OUTPUT_DIR, path-delimited list; default: the server working directory and the OS temp dir); anything else is rejected before any data is fetched.'),
 });
 
 type GetTransactionsInput = z.infer<typeof GetTransactionsInputSchema>;
@@ -132,6 +132,8 @@ export class GetTransactionsTool extends YnabTool {
     has_more: boolean;
   } | TransactionsFileSummary> {
     const input = this.validateArgs<GetTransactionsInput>(args);
+    // Fail on a disallowed path before spending API calls.
+    if (input.output_path) resolveOutputPath(input.output_path);
 
     try {
       let transactionsResponse: YnabTransactionsResponse;
