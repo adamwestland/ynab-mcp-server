@@ -152,8 +152,14 @@ Get budget data for a specific month. Response is trimmed by default to keep pay
     | 'with_activity'   // activity non-zero
     | 'with_balance'    // balance non-zero
     | 'all';            // every non-deleted category (including zero-balance)
+  output_path?: string;       // Absolute file path: write the full JSON response there
+                              // and return a summary instead (see below)
 }
 ```
+
+When `output_path` is set the file gets exactly the response below and the tool
+returns `{ path, bytes, month, category_filter, category_count, to_be_budgeted,
+server_knowledge }`. Use it when the client would truncate a full-month listing.
 
 **Response:**
 ```typescript
@@ -217,8 +223,17 @@ Query transactions with comprehensive filtering options.
   cleared_status?: 'cleared' | 'uncleared' | 'reconciled';
   include_subtransactions?: boolean;    // Include splits (default: true)
   limit?: number;                       // Max transactions (max: 1000)
+  compact?: boolean;                    // Minimal field set
+  fields?: string[];                    // Explicit per-transaction fields (overrides compact)
+  output_path?: string;                 // Absolute file path: write the full JSON response
+                                        // there (after compact/fields) and return a summary
 }
 ```
+
+When `output_path` is set the tool returns `{ path, bytes, transaction_count,
+server_knowledge, has_more, date_range: { from, to }, fields }` and the file holds
+the normal response. Use it for multi-month snapshots that would otherwise be
+truncated by the client.
 
 **Response:**
 ```typescript

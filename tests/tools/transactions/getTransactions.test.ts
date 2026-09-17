@@ -2,7 +2,10 @@
  * GetTransactionsTool Unit Tests
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync, readFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { GetTransactionsTool } from '../../../src/tools/transactions/getTransactions.js';
 import { createMockClient, type MockYNABClient } from '../../helpers/mockClient.js';
 import { createMockTransaction, createMockSplitTransaction } from '../../helpers/fixtures.js';
@@ -541,6 +544,93 @@ describe('GetTransactionsTool', () => {
 
       expect(tx).not.toHaveProperty('flag');
       expect(tx).not.toHaveProperty('import_info');
+    });
+  });
+
+  describe('output_path', () => {
+    let dir: string;
+
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'ynab-mcp-transactions-'));
+      client.getTransactions.mockResolvedValue({
+        transactions: [
+          createMockTransaction({ id: 'tx-old', date: '2024-01-05', amount: -10000, payee_name: 'Older', flag_color: 'yellow' }),
+          createMockTransaction({ id: 'tx-new', date: '2024-02-10', amount: -25000, payee_name: 'Newer' }),
+        ],
+        server_knowledge: 4242,
+      });
+    });
+
+    afterEach(() => {
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('writes the full result to the file and returns a summary instead', async () => {
+      const target = join(dir, 'snapshot.json');
+
+      const result = await tool.execute({ budget_id: 'test-budget', since_date: '2024-01-01', output_path: target });
+
+      expect(result).toMatchObject({
+        path: target,
+        transaction_count: 2,
+        server_knowledge: 4242,
+        has_more: false,
+        date_range: { from: '2024-01-05', to: '2024-02-10' },
+        fields: 'all',
+      });
+      expect((result as any).transactions).toBeUndefined();
+
+      const text = readFileSync(target, 'utf-8');
+      expect((result as any).bytes).toBe(Buffer.byteLength(text, 'utf-8'));
+      const saved = JSON.parse(text);
+      expect(saved.server_knowledge).toBe(4242);
+      expect(saved.filtered_count).toBe(2);
+      expect(saved.has_more).toBe(false);
+      // newest first, same processed shape as the inline response
+      expect(saved.transactions.map((t: any) => t.id)).toEqual(['tx-new', 'tx-old']);
+      expect(saved.transactions[1].payee.name).toBe('Older');
+      expect(saved.transactions[1].flag).toEqual({ color: 'yellow', name: null });
+      expect(saved.transactions[1].amount).toEqual({ milliunits: -10000, formatted: '$-10.00' });
+    });
+
+    it('applies the fields projection to the file and reports it', async () => {
+      const target = join(dir, 'projected.json');
+
+      const result = await tool.execute({
+        budget_id: 'test-budget',
+        fields: ['id', 'category', 'flag'],
+        output_path: target,
+      });
+
+      expect((result as any).fields).toEqual(['id', 'category', 'flag']);
+      // no date in the projection → empty range rather than a crash
+      expect((result as any).date_range).toEqual({ from: '', to: '' });
+      const saved = JSON.parse(readFileSync(target, 'utf-8'));
+      expect(Object.keys(saved.transactions[0]).sort()).toEqual(['category', 'flag', 'id']);
+    });
+
+    it('reports has_more when the limit was hit', async () => {
+      const target = join(dir, 'limited.json');
+
+      const result = await tool.execute({ budget_id: 'test-budget', limit: 1, output_path: target });
+
+      expect((result as any).transaction_count).toBe(1);
+      expect((result as any).has_more).toBe(true);
+      expect(JSON.parse(readFileSync(target, 'utf-8')).transactions).toHaveLength(1);
+    });
+
+    it('creates missing parent directories', async () => {
+      const target = join(dir, 'books', 'proposals', '2024-02-10.snapshot.json');
+
+      await tool.execute({ budget_id: 'test-budget', output_path: target });
+
+      expect(JSON.parse(readFileSync(target, 'utf-8')).transactions).toHaveLength(2);
+    });
+
+    it('returns inline data when output_path is omitted', async () => {
+      const result = await tool.execute({ budget_id: 'test-budget' });
+      expect((result as any).path).toBeUndefined();
+      expect((result as any).transactions).toHaveLength(2);
     });
   });
 });

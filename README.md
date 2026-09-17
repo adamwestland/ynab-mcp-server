@@ -88,10 +88,10 @@ This server provides **30+ specialized tools** organized into these categories:
 ### Budget & Account Management (3 tools)
 - `ynab_list_budgets` - Get all accessible budgets with metadata
 - `ynab_get_accounts` - Retrieve account details, balances, and settings
-- `ynab_get_budget_month` - Get monthly budget data (trimmed by default; use `category_filter: 'all'` for full list)
+- `ynab_get_budget_month` - Get monthly budget data (trimmed by default; use `category_filter: 'all'` for full list; `output_path` writes the JSON to a file and returns a summary)
 
 ### Transaction Management (12 tools)
-- `ynab_get_transactions` - Query transactions with advanced filtering
+- `ynab_get_transactions` - Query transactions with advanced filtering (`output_path` writes the JSON to a file and returns a summary — use it for large snapshots)
 - `ynab_export_transactions_csv` - Export account transactions as compact CSV (no row limit)
 - `ynab_find_transfer_counterpart` - Search other accounts for the opposite side of a potential transfer
 - `ynab_categorize_transactions` - Apply YAML categorization rules against uncategorized transactions
@@ -152,6 +152,20 @@ await tools.ynab_get_transactions({
   budget_id: "your-budget-id",
   since_date: "2024-01-01",
   limit: 100
+});
+
+// Large read? Write the JSON to disk and get a short summary back instead
+// (same shape as the inline response; parents are created; path must be absolute)
+await tools.ynab_get_transactions({
+  budget_id: "your-budget-id",
+  since_date: "2024-01-01",
+  output_path: "/tmp/snapshot.json"
+});
+await tools.ynab_get_budget_month({
+  budget_id: "your-budget-id",
+  month: "2024-01-01",
+  category_filter: "all",
+  output_path: "/tmp/budget-month.json"
 });
 
 // Export account transactions as CSV (no row limit)

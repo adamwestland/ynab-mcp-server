@@ -124,3 +124,5 @@ export function truncate(str: string, maxLength: number): string {
   }
   return str.substring(0, maxLength - 3) + '...';
 }
+
+export { writeJsonFile, type JsonFileWriteResult } from './fileOutput.js';
