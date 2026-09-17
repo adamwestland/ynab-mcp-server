@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { writeFileSync } from 'fs';
 import { YnabTool } from '../base.js';
+import { resolveOutputPath } from '../../utils/fileOutput.js';
 import type { YnabTransactionsResponse } from '../../types/index.js';
 
 const ExportTransactionsInputSchema = z.object({
@@ -8,7 +9,7 @@ const ExportTransactionsInputSchema = z.object({
   account_id: z.string().describe('The account ID to export transactions for'),
   since_date: z.string().optional().describe('Only return transactions on or after this date (YYYY-MM-DD)'),
   all_accounts: z.boolean().optional().default(false).describe('If true, ignore account_id and export all transactions across all accounts'),
-  output_path: z.string().optional().describe('If provided, write CSV to this file path and return a summary instead of the full CSV. Useful for large accounts.'),
+  output_path: z.string().min(1).optional().describe('If provided, write CSV to this file path and return a summary instead of the full CSV. Useful for large accounts. Must resolve inside an allowed directory (YNAB_OUTPUT_DIR, path-delimited list; default: the server working directory and the OS temp dir); anything else is rejected before any data is fetched.'),
 });
 
 type ExportTransactionsInput = z.infer<typeof ExportTransactionsInputSchema>;
@@ -53,6 +54,8 @@ export class ExportTransactionsTool extends YnabTool {
     sum: string;
   }> {
     const input = this.validateArgs<ExportTransactionsInput>(args);
+    // Fail on a disallowed path before spending API calls.
+    const outputPath = input.output_path ? resolveOutputPath(input.output_path) : undefined;
 
     try {
       const requestOptions = {
@@ -104,12 +107,12 @@ export class ExportTransactionsTool extends YnabTool {
       const csv = rows.join('\n');
 
       // If output_path provided, write to file and return summary
-      if (input.output_path) {
-        writeFileSync(input.output_path, csv, 'utf-8');
+      if (outputPath) {
+        writeFileSync(outputPath, csv, 'utf-8');
 
         const dates = transactions.map(t => t.date);
         return {
-          path: input.output_path,
+          path: outputPath,
           count: transactions.length,
           date_range: {
             from: dates[0] || '',

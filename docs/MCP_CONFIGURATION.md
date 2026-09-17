@@ -200,6 +200,7 @@ The YNAB MCP Server supports these environment variables:
 | `YNAB_API_TOKEN` | ✅ | - | Your YNAB API token |
 | `YNAB_BASE_URL` | ❌ | `https://api.youneedabudget.com/v1` | YNAB API base URL |
 | `RATE_LIMIT_REQUESTS` | ❌ | `200` | Max requests per hour |
+| `YNAB_OUTPUT_DIR` | ❌ | server cwd + OS temp dir | Directories that `output_path` (file-writing reads/exports) may write into; path-delimited list. Pin it for unattended agents |
 | `RATE_LIMIT_WINDOW_MS` | ❌ | `3600000` | Rate limit window (1 hour) |
 | `NODE_ENV` | ❌ | `development` | Node environment |
 | `DEBUG` | ❌ | - | Debug logging (set to `ynab-mcp-server:*`) |

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { YnabTool } from '../base.js';
+import { resolveOutputPath, writeJsonFile } from '../../utils/fileOutput.js';
 import type { YnabTransactionsResponse } from '../../types/index.js';
 
 /**
@@ -28,9 +29,21 @@ const GetTransactionsInputSchema = z.object({
   limit: z.number().int().min(1).max(1000).optional().describe('Maximum number of transactions to return (max 1000)'),
   compact: z.boolean().optional().default(false).describe('When true, returns minimal fields: id, date, amount, memo, payee, category, account, cleared, approved. Reduces response size.'),
   fields: z.array(z.enum(VALID_FIELDS)).min(1).optional().describe('Explicit list of fields to include per transaction. Takes precedence over compact. Reduces response size for large result sets.'),
+  output_path: z.string().min(1).optional().describe('If provided, write the full JSON result (same shape as the normal response, after any compact/fields projection) to this absolute file path and return a short summary instead of the transactions. Use for large result sets such as a multi-month snapshot that the client would otherwise truncate. Must resolve inside an allowed directory (YNAB_OUTPUT_DIR, path-delimited list; default: the server working directory and the OS temp dir); anything else is rejected before any data is fetched.'),
 });
 
 type GetTransactionsInput = z.infer<typeof GetTransactionsInputSchema>;
+
+/** Returned instead of the transaction list when `output_path` is set. */
+interface TransactionsFileSummary {
+  path: string;
+  bytes: number;
+  transaction_count: number;
+  server_knowledge: number;
+  has_more: boolean;
+  date_range: { from: string; to: string };
+  fields: string[] | 'all';
+}
 
 /**
  * Tool for getting transactions with comprehensive filtering options
@@ -45,7 +58,7 @@ type GetTransactionsInput = z.infer<typeof GetTransactionsInputSchema>;
  */
 export class GetTransactionsTool extends YnabTool {
   name = 'ynab_get_transactions';
-  description = 'Get transactions with comprehensive filtering options. Supports date filtering, account filtering, category/payee filtering, and delta sync. Use "compact: true" for a minimal field set, or "fields" to choose exactly which fields to return (reduces response size for large result sets).';
+  description = 'Get transactions with comprehensive filtering options. Supports date filtering, account filtering, category/payee filtering, and delta sync. Use "compact: true" for a minimal field set, or "fields" to choose exactly which fields to return (reduces response size for large result sets). Set output_path to write the full JSON to a file and get a summary back instead.';
   inputSchema = GetTransactionsInputSchema;
 
   /**
@@ -117,8 +130,10 @@ export class GetTransactionsTool extends YnabTool {
     server_knowledge: number;
     filtered_count: number;
     has_more: boolean;
-  }> {
+  } | TransactionsFileSummary> {
     const input = this.validateArgs<GetTransactionsInput>(args);
+    // Fail on a disallowed path before spending API calls.
+    if (input.output_path) resolveOutputPath(input.output_path);
 
     try {
       let transactionsResponse: YnabTransactionsResponse;
@@ -304,12 +319,30 @@ export class GetTransactionsTool extends YnabTool {
         new Date((b as any).date).getTime() - new Date((a as any).date).getTime()
       );
 
-      return {
+      const result = {
         transactions: sortedTransactions as any,
         server_knowledge: transactionsResponse.server_knowledge,
         filtered_count: sortedTransactions.length,
         has_more: input.limit ? sortedTransactions.length === input.limit : false,
       };
+
+      if (input.output_path) {
+        const written = writeJsonFile(input.output_path, result);
+        // sortedTransactions is newest-first; a projection without `date` yields an empty range
+        const dates = sortedTransactions
+          .map(tx => (tx as Record<string, unknown>).date)
+          .filter((d): d is string => typeof d === 'string');
+        return {
+          ...written,
+          transaction_count: sortedTransactions.length,
+          server_knowledge: result.server_knowledge,
+          has_more: result.has_more,
+          date_range: { from: dates[dates.length - 1] ?? '', to: dates[0] ?? '' },
+          fields: effectiveFields ? [...effectiveFields] : 'all',
+        };
+      }
+
+      return result;
 
     } catch (error) {
       this.handleError(error, 'get transactions');

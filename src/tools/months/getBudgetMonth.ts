@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { YnabTool } from '../base.js';
+import { resolveOutputPath, writeJsonFile } from '../../utils/fileOutput.js';
 import type { YnabBudgetMonthResponse, YnabCategory } from '../../types/index.js';
 
 const CategoryFilterSchema = z.enum(['active', 'with_activity', 'with_balance', 'all']);
@@ -10,6 +11,10 @@ const GetBudgetMonthInputSchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}-01$/).describe('The budget month in YYYY-MM-01 format (first day of month)'),
   category_filter: CategoryFilterSchema.optional().default('active').describe(
     'Which categories to include. "active" (default): budgeted/activity/balance non-zero. "with_activity": activity non-zero. "with_balance": balance non-zero. "all": every non-deleted category (including zero-balance). Deleted categories and goal metadata are always omitted.'
+  ),
+  output_path: z.string().min(1).optional().describe(
+    'If provided, write the full JSON result (same shape as the normal response) to this absolute file path and return a short summary instead of the data. Use when the response would be too large for the client to accept in one tool result, e.g. category_filter="all" on a large budget.' +
+    'Must resolve inside an allowed directory (YNAB_OUTPUT_DIR, path-delimited list; default: the server working directory and the OS temp dir); anything else is rejected before any data is fetched.'
   ),
 });
 
@@ -30,6 +35,17 @@ interface ProcessedCategory {
   activity: FormattedAmount;
   balance: FormattedAmount;
   note?: string;
+}
+
+/** Returned instead of the month data when `output_path` is set. */
+interface BudgetMonthFileSummary {
+  path: string;
+  bytes: number;
+  month: string;
+  category_filter: CategoryFilter;
+  category_count: number;
+  to_be_budgeted: FormattedAmount;
+  server_knowledge: number;
 }
 
 interface ProcessedMonth {
@@ -59,11 +75,13 @@ function shouldInclude(c: YnabCategory, filter: CategoryFilter): boolean {
 
 export class GetBudgetMonthTool extends YnabTool {
   name = 'ynab_get_budget_month';
-  description = 'Get budget data for a specific month. Returns only active categories by default (budgeted/activity/balance non-zero) and omits goal metadata. Use category_filter to broaden or narrow the result.';
+  description = 'Get budget data for a specific month. Returns only active categories by default (budgeted/activity/balance non-zero) and omits goal metadata. Use category_filter to broaden or narrow the result. Set output_path to write the full JSON to a file and get a summary back (for large budgets).';
   inputSchema = GetBudgetMonthInputSchema;
 
-  async execute(args: unknown): Promise<{ month: ProcessedMonth; server_knowledge: number }> {
+  async execute(args: unknown): Promise<{ month: ProcessedMonth; server_knowledge: number } | BudgetMonthFileSummary> {
     const input = this.validateArgs<GetBudgetMonthInput>(args);
+    // Fail on a disallowed path before spending API calls.
+    if (input.output_path) resolveOutputPath(input.output_path);
 
     try {
       const budgetMonthResponse: YnabBudgetMonthResponse = await this.client.getBudgetMonth(
@@ -132,10 +150,24 @@ export class GetBudgetMonthTool extends YnabTool {
 
       if (month.note) processedMonth.note = month.note;
 
-      return {
+      const result = {
         month: processedMonth,
         server_knowledge: budgetMonthResponse.server_knowledge,
       };
+
+      if (input.output_path) {
+        const written = writeJsonFile(input.output_path, result);
+        return {
+          ...written,
+          month: processedMonth.month,
+          category_filter: input.category_filter,
+          category_count: processedCategories.length,
+          to_be_budgeted: processedMonth.to_be_budgeted,
+          server_knowledge: budgetMonthResponse.server_knowledge,
+        };
+      }
+
+      return result;
 
     } catch (error) {
       this.handleError(error, 'get budget month');

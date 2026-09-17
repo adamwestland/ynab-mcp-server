@@ -2,7 +2,10 @@
  * GetBudgetMonthTool Unit Tests
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync, readFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { GetBudgetMonthTool } from '../../../src/tools/months/getBudgetMonth.js';
 import { createMockClient, type MockYNABClient } from '../../helpers/mockClient.js';
 import { createMockCategory, createMockCategoryGroup } from '../../helpers/fixtures.js';
@@ -374,6 +377,119 @@ describe('GetBudgetMonthTool', () => {
         const ids = result.month.categories.map(c => c.id);
         expect(ids).not.toContain('gone');
       }
+    });
+  });
+
+  describe('output_path', () => {
+    let dir: string;
+
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'ynab-mcp-budget-month-'));
+    });
+
+    afterEach(() => {
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    function primeMonth() {
+      const mockMonth = createMockBudgetMonth({
+        categories: [
+          createMockCategory({ id: 'cat-1', name: 'Groceries', category_group_id: 'group-1', budgeted: 100000, activity: -80000, balance: 20000 }),
+          createMockCategory({ id: 'cat-2', name: 'Dormant', category_group_id: 'group-1', budgeted: 0, activity: 0, balance: 0 }),
+        ],
+      });
+      client.getBudgetMonth.mockResolvedValue({ month: mockMonth, server_knowledge: 777 });
+      const group = createMockCategoryGroup(1, { id: 'group-1', name: 'Food' });
+      group.categories = mockMonth.categories;
+      client.getCategories.mockResolvedValue({ category_groups: [group], server_knowledge: 777 });
+    }
+
+    it('writes the full result to the file and returns a summary instead', async () => {
+      primeMonth();
+      const target = join(dir, 'budget-month.json');
+
+      const result = await tool.execute({
+        budget_id: 'test-budget',
+        month: '2024-01-01',
+        category_filter: 'all',
+        output_path: target,
+      });
+
+      // summary, not data
+      expect(result).toMatchObject({
+        path: target,
+        month: '2024-01-01',
+        category_filter: 'all',
+        category_count: 2,
+        server_knowledge: 777,
+      });
+      expect((result as any).to_be_budgeted.milliunits).toBe(100000);
+      expect((result as any).month).toBe('2024-01-01');
+      expect((result as any).categories).toBeUndefined();
+
+      // the file has exactly the normal response shape
+      const text = readFileSync(target, 'utf-8');
+      expect((result as any).bytes).toBe(Buffer.byteLength(text, 'utf-8'));
+      const saved = JSON.parse(text);
+      expect(saved.server_knowledge).toBe(777);
+      expect(saved.month.month).toBe('2024-01-01');
+      expect(saved.month.categories.map((c: any) => c.name)).toEqual(['Groceries', 'Dormant']);
+      expect(saved.month.categories[0].category_group_name).toBe('Food');
+      expect(saved.month.categories[0].balance).toEqual({ milliunits: 20000, formatted: '$20.00' });
+    });
+
+    it('applies category_filter before writing', async () => {
+      primeMonth();
+      const target = join(dir, 'active.json');
+
+      const result = await tool.execute({
+        budget_id: 'test-budget',
+        month: '2024-01-01',
+        output_path: target,
+      });
+
+      expect((result as any).category_count).toBe(1);
+      expect((result as any).category_filter).toBe('active');
+      const saved = JSON.parse(readFileSync(target, 'utf-8'));
+      expect(saved.month.categories.map((c: any) => c.name)).toEqual(['Groceries']);
+    });
+
+    it('creates missing parent directories', async () => {
+      primeMonth();
+      const target = join(dir, 'proposals', '2024-01-01.budget-month.json');
+
+      await tool.execute({ budget_id: 'test-budget', month: '2024-01-01', output_path: target });
+
+      expect(JSON.parse(readFileSync(target, 'utf-8')).month.month).toBe('2024-01-01');
+    });
+
+    it('rejects an output_path outside the allowed directories before calling the API', async () => {
+      primeMonth();
+      const saved = process.env.YNAB_OUTPUT_DIR;
+      process.env.YNAB_OUTPUT_DIR = dir;
+      try {
+        await expect(tool.execute({
+          budget_id: 'test-budget',
+          month: '2024-01-01',
+          output_path: join(dir, '..', 'escape.json'),
+        })).rejects.toThrow(/outside the allowed output directories/);
+        expect(client.getBudgetMonth).not.toHaveBeenCalled();
+      } finally {
+        if (saved === undefined) delete process.env.YNAB_OUTPUT_DIR;
+        else process.env.YNAB_OUTPUT_DIR = saved;
+      }
+    });
+
+    it('rejects an empty output_path', async () => {
+      primeMonth();
+      await expect(tool.execute({ budget_id: 'test-budget', month: '2024-01-01', output_path: '' })).rejects.toThrow();
+    });
+
+    it('returns inline data when output_path is omitted', async () => {
+      primeMonth();
+      const result = await tool.execute({ budget_id: 'test-budget', month: '2024-01-01' });
+      expect((result as any).path).toBeUndefined();
+      expect((result as any).month.categories).toHaveLength(1);
     });
   });
 });
