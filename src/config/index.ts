@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 // carries the MCP stdio protocol stream.
 dotenv.config({ quiet: true });
 
-const ConfigSchema = z.object({
+export const ConfigSchema = z.object({
   ynabApiToken: z.string().min(1, 'YNAB API token is required'),
   ynabBaseUrl: z.string().url().default('https://api.youneedabudget.com/v1'),
   rateLimit: z.object({
