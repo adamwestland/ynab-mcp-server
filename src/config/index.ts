@@ -11,7 +11,7 @@ const ConfigSchema = z.object({
   rateLimit: z.object({
     requests: z.number().positive().default(200),
     windowMs: z.number().positive().default(60 * 60 * 1000), // 1 hour in ms
-  }).default({}),
+  }).prefault({}),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
