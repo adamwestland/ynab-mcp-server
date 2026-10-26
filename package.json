@@ -1,6 +1,6 @@
 {
   "name": "ynab-mcp-server",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "description": "Comprehensive Model Context Protocol server providing intelligent access to YNAB (You Need A Budget) data with AI-powered budget recommendations, spending analysis, and complete transaction management",
   "type": "module",
   "main": "dist/index.js",
@@ -16,7 +16,8 @@
     "lint": "tsc --noEmit",
     "clean": "rm -rf dist",
     "prepare": "npm run build",
-    "prestart": "npm run build"
+    "prestart": "npm run build",
+    "test:schema": "node tests/schema-smoke.mjs"
   },
   "keywords": [
     "ynab",
@@ -70,8 +71,7 @@
     "dotenv": "^17.2.1",
     "uuid": "^14.0.0",
     "yaml": "^2.8.3",
-    "zod": "^3.25.76",
-    "zod-to-json-schema": "^3.25.1"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
